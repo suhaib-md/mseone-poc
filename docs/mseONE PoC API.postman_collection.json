@@ -1,0 +1,129 @@
+{
+	"info": {
+		"_postman_id": "8386bf82-7e8c-47e2-ad51-f33a69c18a3d",
+		"name": "mseONE PoC API",
+		"description": "This collection contains requests for the mseONE PoC API.\n\nThe API is built with FastAPI + Strawberry (GraphQL) and is designed to expose project metadata with filtering and pagination.\n\n### Authentication\n\nAll requests to `/graphql` require a Bearer token.  \nFor local development use:  \nAuthorization: Bearer devtoken123\n\nThe `/healthz` endpoint does not require authentication.\n\n### Base URL\n\n- Local: [http://localhost:8001](http://localhost:8001)\n    \n- (later) Azure Deployed: https://.azurewebsites.net\n    \n\n### Contents\n\n- Health Check (REST GET)\n    \n- GraphQL – Project By ID\n    \n- GraphQL – Projects List (with filtering and pagination)\n    \n\n### Notes\n\n- Results will later be persisted to Azure Storage.\n    \n- In Phase 2, the API will validate Azure AD tokens instead of the local dev token.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "41789439"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/healthz",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"healthz"
+					]
+				},
+				"description": "Simple health endpoint to verify that the API is up and running.\n\n### Method\n\nGET /healthz\n\n### Authentication\n\nNot required.\n\n### Response\n\n200 OK  \n{  \n\"status\": \"ok\"  \n}"
+			},
+			"response": []
+		},
+		{
+			"name": "Project by ID",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ project(id: 1) { id name status } }\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/graphql",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"graphql"
+					]
+				},
+				"description": "Fetch metadata for a single project by its numeric ID.\n\n### Method\n\nPOST /graphql\n\n### Query\n\n{  \nproject(id: 1) {  \nid  \nname  \nstatus  \n}  \n}\n\n### Variables\n\nNot required.\n\n### Authentication\n\nRequired: Authorization: Bearer devtoken123\n\n### Response\n\n{  \n\"data\": {  \n\"project\": {  \n\"id\": \"1\",  \n\"name\": \"Apollo\",  \n\"status\": \"active\"  \n}  \n}  \n}"
+			},
+			"response": []
+		},
+		{
+			"name": "Projects List",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($first:Int!, $name:String){ projects(first:$first, nameContains:$name){ totalCount edges { node { id name status } } pageInfo { hasNextPage endCursor } } }\",\r\n  \"variables\": {\r\n    \"first\": 2,\r\n    \"name\": \"o\"\r\n  }\r\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/graphql",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"graphql"
+					]
+				},
+				"description": "Fetch a list of projects, with optional filters and cursor-based pagination.\n\n### Method\n\nPOST /graphql\n\n### Query\n\nquery($first:Int!, $name:String, $after:String){  \nprojects(first:$first, nameContains:$name, after:$after){  \ntotalCount  \nedges { cursor node { id name status } }  \npageInfo { hasNextPage endCursor }  \n}  \n}\n\n### Variables\n\n{  \n\"first\": 2,  \n\"name\": \"o\"  \n}\n\n- `first`: number of results to fetch (max 50)\n    \n- `name`: optional substring filter on project name\n    \n- `after`: optional cursor for pagination\n    \n\n### Authentication\n\nRequired: Authorization: Bearer devtoken123\n\n### Response (example)\n\n{  \n\"data\": {  \n\"projects\": {  \n\"totalCount\": 3,  \n\"edges\": \\[  \n{ \"cursor\": \"cGlkOjI=\", \"node\": { \"id\": \"2\", \"name\": \"Zephyr\", \"status\": \"active\" }},  \n{ \"cursor\": \"cGlkOjQ=\", \"node\": { \"id\": \"4\", \"name\": \"Orion\", \"status\": \"active\" }}  \n\\],  \n\"pageInfo\": {  \n\"hasNextPage\": true,  \n\"endCursor\": \"cGlkOjQ=\"  \n}  \n}  \n}  \n}"
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "devtoken123",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8001",
+			"type": "string"
+		}
+	]
+}
