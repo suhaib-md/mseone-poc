@@ -6,7 +6,7 @@ from strawberry.fastapi import GraphQLRouter
 
 from api.graphql.schema import schema
 
-ENV = os.getenv("APP_ENV", "local")
+ENV = os.getenv("APP_ENV", "azure")
 
 if ENV == "local":
     from api.auth import require_bearer as auth_dep
