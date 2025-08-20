@@ -1,9 +1,11 @@
 from fastapi import Header, HTTPException, status
-from jose import jwt
-from jose.utils import base64url_decode
+import jwt
 import requests
 import os
 from functools import lru_cache
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+import base64
 
 TENANT_ID = os.getenv("AZURE_TENANT_ID", "d2fd2d1b-9f4e-459b-84ab-d6f0db24a087")
 AUDIENCE = os.getenv("AZURE_AUDIENCE", "api://5551da76-8fe1-4a20-ac0f-6f817cc75f2f")
@@ -21,10 +23,35 @@ def get_jwks():
         print(f"Failed to fetch JWKS: {e}")
         raise
 
+def jwk_to_pem(jwk):
+    """Convert JWK to PEM format for PyJWT"""
+    try:
+        # Extract the modulus and exponent from JWK
+        n = base64.urlsafe_b64decode(jwk['n'] + '==')  # Add padding
+        e = base64.urlsafe_b64decode(jwk['e'] + '==')  # Add padding
+        
+        # Convert bytes to integers
+        n_int = int.from_bytes(n, 'big')
+        e_int = int.from_bytes(e, 'big')
+        
+        # Create RSA public key
+        public_key = rsa.RSAPublicNumbers(e_int, n_int).public_key()
+        
+        # Convert to PEM
+        pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        
+        return pem
+    except Exception as e:
+        print(f"Error converting JWK to PEM: {e}")
+        raise
+
 def validate_jwt(token: str):
     try:
         # First, let's decode without verification to see the claims
-        unverified_payload = jwt.get_unverified_claims(token)
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
         print(f"Unverified payload: {unverified_payload}")
         
         # Extract header to find which key was used
@@ -47,8 +74,13 @@ def validate_jwt(token: str):
 
         print(f"Found matching key with kid: {kid}")
 
-        # Build public key
-        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+        # Convert JWK to PEM format
+        try:
+            public_key = jwk_to_pem(key)
+            print("Successfully converted JWK to PEM")
+        except Exception as key_error:
+            print(f"Failed to convert JWK to PEM: {key_error}")
+            raise
 
         # Try decoding with minimal validation first
         try:
@@ -96,11 +128,11 @@ def validate_jwt(token: str):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
         )
-    except jwt.JWTClaimsError as e:
-        print(f"JWT Claims error: {e}")
+    except jwt.InvalidTokenError as e:
+        print(f"JWT Invalid token error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token claims validation failed: {e}",
+            detail=f"Token validation failed: {e}",
         )
     except Exception as e:
         print(f"Token validation error: {e}")
@@ -110,11 +142,23 @@ def validate_jwt(token: str):
         )
 
 async def require_aad_bearer(authorization: str = Header(None)):
+    print(f"require_aad_bearer called with authorization: {authorization[:50] if authorization else None}...")
+    
     if not authorization or not authorization.lower().startswith("bearer "):
+        print("Missing or invalid authorization header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Missing bearer token"
         )
     
     token = authorization.split(" ", 1)[1]
-    return validate_jwt(token)
+    print(f"Extracted token (first 50 chars): {token[:50]}...")
+    print("Calling validate_jwt...")
+    
+    try:
+        result = validate_jwt(token)
+        print("validate_jwt succeeded")
+        return result
+    except Exception as e:
+        print(f"validate_jwt failed: {e}")
+        raise
