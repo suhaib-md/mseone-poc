@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+
 from fastapi import Depends, FastAPI
 from strawberry.fastapi import GraphQLRouter
 
@@ -21,6 +22,7 @@ graphql_app = GraphQLRouter(schema)
 
 # Mount GraphQL with dependency
 app.include_router(graphql_app, prefix="/graphql", dependencies=[Depends(auth_dep)])
+
 
 @app.get("/healthz")
 def health():

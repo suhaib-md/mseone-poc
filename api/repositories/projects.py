@@ -1,7 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+
+import builtins
 import os
+from dataclasses import dataclass
+
 from azure.cosmos import CosmosClient, exceptions
 
 
@@ -27,7 +29,7 @@ class ProjectRepository:
         self.db = self.client.get_database_client(database_name)
         self.container = self.db.get_container_client(container_name)
 
-    def get_by_id(self, pid: int) -> Optional[ProjectRecord]:
+    def get_by_id(self, pid: int) -> ProjectRecord | None:
         try:
             item = self.container.read_item(item=str(pid), partition_key=str(pid))
             return ProjectRecord(id=int(item["id"]), name=item["name"], status=item["status"])
@@ -36,11 +38,11 @@ class ProjectRepository:
 
     def list(
         self,
-        name_contains: Optional[str] = None,
-        status: Optional[str] = None,
+        name_contains: str | None = None,
+        status: str | None = None,
         first: int = 10,
-        after_id: Optional[int] = None,
-    ) -> Tuple[List[ProjectRecord], bool]:
+        after_id: int | None = None,
+    ) -> tuple[builtins.list[ProjectRecord], bool]:
         query = "SELECT * FROM c"
         filters = []
         params = []
@@ -65,9 +67,11 @@ class ProjectRepository:
             enable_cross_partition_query=True,
         )
 
-        results: List[ProjectRecord] = []
+        results: list[ProjectRecord] = []
         for item in items_iter:
-            results.append(ProjectRecord(id=int(item["id"]), name=item["name"], status=item["status"]))
+            results.append(
+                ProjectRecord(id=int(item["id"]), name=item["name"], status=item["status"])
+            )
             if len(results) >= first + 1:
                 break
 
