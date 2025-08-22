@@ -5,7 +5,6 @@ import base64
 import strawberry
 
 from api.repositories.projects import ProjectRecord, ProjectRepository
-
 from api.services.storage import StorageService
 
 
@@ -58,7 +57,16 @@ class Query:
     def project(self, id: strawberry.ID) -> Project | None:
         repo = ProjectRepository()
         rec = repo.get_by_id(int(id))
-        return Project.from_record(rec) if rec else None
+        if rec:
+            # Save result to Blob Storage
+            storage = StorageService()
+            storage.save_result({
+                "query": "project", 
+                "project_id": int(id),
+                "result": {"id": rec.id, "name": rec.name, "status": rec.status}
+            })
+            return Project.from_record(rec)
+        return None
 
     @strawberry.field
     def projects(
@@ -79,20 +87,21 @@ class Query:
         edges = [ProjectEdge(cursor=encode_cursor(r.id), node=Project.from_record(r)) for r in rows]
         end_cursor = edges[-1].cursor if edges else None
         total = len([*repo.list(name_contains, status, 1000, None)][0])  # rough count
+        
+        # Save result to Blob Storage
+        storage = StorageService()
+        storage.save_result({
+            "query": "projects",
+            "filters": {"name_contains": name_contains, "status": status},
+            "pagination": {"first": first, "after": after},
+            "result_count": len(rows)
+        })
+        
         return ProjectConnection(
             edges=edges,
             page_info=PageInfo(has_next_page=has_next, end_cursor=end_cursor),
             total_count=total,
         )
-    
-@strawberry.type
-class Query:
-    @strawberry.field
-    def project(self, id: int) -> Project:
-        project = ProjectRepository().get_project(id)
-        # Save result to Blob
-        StorageService().save_result({"query": "project", "result": project.__dict__})
-        return project
 
 
 schema = strawberry.Schema(query=Query)
