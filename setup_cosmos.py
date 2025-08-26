@@ -7,6 +7,8 @@ This script:
 2. Seeds sample project data
 3. Validates the setup
 4. Creates indexes for better query performance
+
+FIXED: Cross-partition query issues with GROUP BY aggregates
 """
 
 import os
@@ -236,18 +238,21 @@ def validate_setup(container):
         
         print(f"✅ Found {project_count} projects in container")
         
-        # Test status breakdown
-        status_query = """
-        SELECT c.status, COUNT(1) as count 
-        FROM c 
-        WHERE c.type = 'project' 
-        GROUP BY c.status
-        """
-        status_results = list(container.query_items(query=status_query, enable_cross_partition_query=True))
-        
+        # FIXED: Use individual queries for status breakdown instead of GROUP BY
         print("📊 Project status breakdown:")
-        for result in status_results:
-            print(f"   {result['status']}: {result['count']} projects")
+        statuses = ["active", "archived", "draft", "completed"]
+        status_summary = {}
+        
+        for status in statuses:
+            status_query = f"SELECT VALUE COUNT(1) FROM c WHERE c.type = 'project' AND c.status = '{status}'"
+            status_results = list(container.query_items(
+                query=status_query, 
+                enable_cross_partition_query=True
+            ))
+            count = status_results[0] if status_results else 0
+            if count > 0:
+                status_summary[status] = count
+                print(f"   {status}: {count} projects")
         
         # Test single project retrieval
         single_project_query = "SELECT TOP 1 * FROM c WHERE c.type = 'project'"
@@ -256,6 +261,29 @@ def validate_setup(container):
         if single_result:
             project = single_result[0]
             print(f"✅ Sample project: {project['name']} (Status: {project['status']})")
+        
+        # Test filtering queries
+        print("\n🔍 Testing filtering capabilities:")
+        
+        # Test name filtering
+        name_filter_query = "SELECT * FROM c WHERE c.type = 'project' AND CONTAINS(UPPER(c.name), 'APOLLO')"
+        name_results = list(container.query_items(query=name_filter_query, enable_cross_partition_query=True))
+        print(f"   Name contains 'Apollo': {len(name_results)} results")
+        
+        # Test status filtering
+        status_filter_query = "SELECT * FROM c WHERE c.type = 'project' AND c.status = 'active'"
+        status_results = list(container.query_items(query=status_filter_query, enable_cross_partition_query=True))
+        print(f"   Active projects: {len(status_results)} results")
+        
+        # Test tag filtering
+        tag_filter_query = "SELECT * FROM c WHERE c.type = 'project' AND ARRAY_CONTAINS(c.tags, 'renewable')"
+        tag_results = list(container.query_items(query=tag_filter_query, enable_cross_partition_query=True))
+        print(f"   Projects with 'renewable' tag: {len(tag_results)} results")
+        
+        # Test ordering
+        order_query = "SELECT c.id, c.name, c.created_at FROM c WHERE c.type = 'project' ORDER BY c.created_at DESC"
+        order_results = list(container.query_items(query=order_query, enable_cross_partition_query=True))
+        print(f"   Ordered by created_at (DESC): {len(order_results)} results")
         
         print("✅ All validation checks passed!")
         
@@ -301,6 +329,7 @@ query {
         name
         status
         budget
+        tags
       }
     }
     pageInfo {
@@ -323,6 +352,28 @@ query {
         name
         ownerId
         tags
+        budget
+      }
+    }
+  }
+}
+"""
+        },
+        {
+            "name": "Filter by name and tags",
+            "query": """
+query {
+  projects(nameContains: "Apollo", tags: ["space"], first: 5) {
+    totalCount
+    edges {
+      node {
+        id
+        name
+        description
+        status
+        tags
+        budget
+        dueDate
       }
     }
   }
@@ -339,6 +390,7 @@ mutation {
     status: ACTIVE
     tags: ["test", "graphql"]
     budget: 100000
+    ownerId: "user_test"
   }) {
     success
     error
@@ -346,6 +398,34 @@ mutation {
       id
       name
       status
+      createdAt
+      updatedAt
+    }
+  }
+}
+"""
+        },
+        {
+            "name": "Update existing project",
+            "query": """
+mutation {
+  updateProject(
+    id: "proj_apollo_001"
+    input: {
+      description: "Updated description"
+      status: COMPLETED
+      budget: 2600000
+    }
+  ) {
+    success
+    error
+    project {
+      id
+      name
+      status
+      description
+      budget
+      updatedAt
     }
   }
 }
@@ -364,6 +444,39 @@ query {
   }
 }
 """
+        },
+        {
+            "name": "Pagination example",
+            "query": """
+query {
+  projects(
+    first: 3
+    orderBy: CREATED_AT
+    orderDirection: DESC
+  ) {
+    totalCount
+    edges {
+      cursor
+      node {
+        id
+        name
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+
+# Then use the endCursor for next page:
+# query {
+#   projects(first: 3, after: "CURSOR_VALUE_HERE") {
+#     edges { ... }
+#   }
+# }
+"""
         }
     ]
     
@@ -371,6 +484,42 @@ query {
         print(f"\n{i}. {query['name']}:")
         print(query['query'])
     
+    print("="*60)
+
+
+def print_curl_examples():
+    """Print curl examples for testing the API"""
+    print("\n" + "="*60)
+    print("CURL EXAMPLES FOR API TESTING")
+    print("="*60)
+    print("""
+# Health check (no auth required)
+curl -X GET http://localhost:8001/healthz
+
+# GraphQL query (requires auth)
+curl -X POST http://localhost:8001/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer devtoken123" \
+  -d '{
+    "query": "{ projects(first: 3) { totalCount edges { node { id name status } } } }"
+  }'
+
+# Create project mutation
+curl -X POST http://localhost:8001/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer devtoken123" \
+  -d '{
+    "query": "mutation { createProject(input: { name: \\"API Test Project\\", status: ACTIVE, tags: [\\"api\\", \\"test\\"] }) { success project { id name status } error } }"
+  }'
+
+# Get project by ID
+curl -X POST http://localhost:8001/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer devtoken123" \
+  -d '{
+    "query": "{ project(id: \\"proj_apollo_001\\") { id name status description budget tags } }"
+  }'
+""")
     print("="*60)
 
 
@@ -382,16 +531,16 @@ def main():
     # Get Cosmos client
     try:
         client = get_cosmos_client()
-        print("Connected to Cosmos DB successfully")
+        print("✅ Connected to Cosmos DB successfully")
     except Exception as e:
-        print(f"Failed to connect to Cosmos DB: {e}")
+        print(f"❌ Failed to connect to Cosmos DB: {e}")
         sys.exit(1)
     
     # Create database and container
     try:
         database, container = create_database_and_container(client)
     except Exception as e:
-        print(f"Failed to create database/container: {e}")
+        print(f"❌ Failed to create database/container: {e}")
         sys.exit(1)
     
     # Generate and seed sample data
@@ -399,27 +548,31 @@ def main():
         sample_projects = create_sample_projects()
         seed_projects(container, sample_projects)
     except Exception as e:
-        print(f"Failed to seed data: {e}")
+        print(f"❌ Failed to seed data: {e}")
         sys.exit(1)
     
     # Setup indexes
     try:
         create_indexes(container)
     except Exception as e:
-        print(f"Warning: Failed to setup indexes: {e}")
+        print(f"⚠️  Warning: Failed to setup indexes: {e}")
     
     # Validate setup
     if not validate_setup(container):
-        print("Setup validation failed!")
+        print("❌ Setup validation failed!")
         sys.exit(1)
     
     # Print helpful information
     print_connection_info()
     print_sample_queries()
+    print_curl_examples()
     
-    print(f"\nSetup completed successfully!")
+    print(f"\n🎉 Setup completed successfully!")
     print("Your API should now be able to query the seeded data.")
-    print("Run your FastAPI server and try the sample queries above.")
+    print("\nNext steps:")
+    print("1. Start your FastAPI server: uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload")
+    print("2. Open GraphQL Playground: http://localhost:8001/graphql")
+    print("3. Try the sample queries above!")
 
 
 if __name__ == "__main__":

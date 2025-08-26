@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -130,10 +129,18 @@ class ProjectRepository:
         now = datetime.utcnow()
         project_id = f"proj_{int(now.timestamp() * 1000)}"  # Simple ID generation
         
+        # Validate name is not empty
+        if not request.name or not request.name.strip():
+            raise ValueError("Project name cannot be empty")
+        
+        # Validate budget if provided
+        if request.budget is not None and request.budget < 0:
+            raise ValueError("Budget cannot be negative")
+        
         project = ProjectRecord(
             id=project_id,
-            name=request.name,
-            description=request.description,
+            name=request.name.strip(),
+            description=request.description.strip() if request.description else None,
             status=request.status,
             owner_id=request.owner_id,
             created_at=now,
@@ -170,9 +177,11 @@ class ProjectRepository:
             
             # Update fields if provided
             if request.name is not None:
-                existing_project.name = request.name
+                if not request.name.strip():
+                    raise ValueError("Project name cannot be empty")
+                existing_project.name = request.name.strip()
             if request.description is not None:
-                existing_project.description = request.description
+                existing_project.description = request.description.strip() if request.description else None
             if request.status is not None:
                 existing_project.status = request.status
             if request.owner_id is not None:
@@ -180,6 +189,8 @@ class ProjectRepository:
             if request.tags is not None:
                 existing_project.tags = request.tags
             if request.budget is not None:
+                if request.budget < 0:
+                    raise ValueError("Budget cannot be negative")
                 existing_project.budget = request.budget
             if request.due_date is not None:
                 existing_project.due_date = request.due_date
@@ -192,6 +203,8 @@ class ProjectRepository:
             
         except exceptions.CosmosResourceNotFoundError:
             return None
+        except ValueError:
+            raise  # Re-raise validation errors
         except Exception as e:
             raise RuntimeError(f"Failed to update project {project_id}: {e}")
 
@@ -239,13 +252,36 @@ class ProjectRepository:
                 query += f" AND ARRAY_CONTAINS(c.tags, @tag{i})"
                 parameters.append({"name": f"@tag{i}", "value": tag})
 
+        # Handle pagination with cursor
         if after_id:
-            # Simple cursor pagination using ID comparison
-            if order_direction.upper() == "DESC":
-                query += " AND c.id < @after_id"
-            else:
-                query += " AND c.id > @after_id"
-            parameters.append({"name": "@after_id", "value": after_id})
+            # Use created_at for stable pagination instead of ID comparison
+            try:
+                after_project = self.container.read_item(item=after_id, partition_key=after_id)
+                after_timestamp = after_project['created_at']
+                
+                if order_by == "created_at":
+                    if order_direction.upper() == "DESC":
+                        query += " AND c.created_at < @after_created_at"
+                    else:
+                        query += " AND c.created_at > @after_created_at"
+                    parameters.append({"name": "@after_created_at", "value": after_timestamp})
+                elif order_by == "updated_at":
+                    after_timestamp = after_project['updated_at']
+                    if order_direction.upper() == "DESC":
+                        query += " AND c.updated_at < @after_updated_at"
+                    else:
+                        query += " AND c.updated_at > @after_updated_at"
+                    parameters.append({"name": "@after_updated_at", "value": after_timestamp})
+                else:
+                    # Fallback to ID-based pagination for other fields
+                    if order_direction.upper() == "DESC":
+                        query += " AND c.id < @after_id"
+                    else:
+                        query += " AND c.id > @after_id"
+                    parameters.append({"name": "@after_id", "value": after_id})
+            except exceptions.CosmosResourceNotFoundError:
+                # If after_id doesn't exist, ignore pagination
+                pass
 
         # Add ordering
         if order_by == "created_at":
@@ -253,7 +289,7 @@ class ProjectRepository:
         elif order_by == "updated_at":
             query += f" ORDER BY c.updated_at {order_direction.upper()}"
         elif order_by == "name":
-            query += f" ORDER BY c.name {order_direction.upper()}"
+            query += f" ORDER BY UPPER(c.name) {order_direction.upper()}"
         else:
             query += f" ORDER BY c.id {order_direction.upper()}"
 
@@ -315,19 +351,136 @@ class ProjectRepository:
             raise RuntimeError(f"Failed to get project count: {e}")
 
     def get_projects_by_status_summary(self) -> dict:
-        """Get summary of projects by status"""
-        query = """
-        SELECT c.status, COUNT(1) as count
-        FROM c 
-        WHERE c.type = 'project'
-        GROUP BY c.status
-        """
+        """Get summary of projects by status using individual queries"""
+        statuses = ["active", "archived", "draft", "completed"]
+        summary = {}
+        
+        for status in statuses:
+            try:
+                query = f"SELECT VALUE COUNT(1) FROM c WHERE c.type = 'project' AND c.status = '{status}'"
+                result = list(self.container.query_items(
+                    query=query,
+                    enable_cross_partition_query=True
+                ))
+                count = result[0] if result else 0
+                if count > 0:
+                    summary[status] = count
+            except Exception as e:
+                print(f"Warning: Failed to get count for status {status}: {e}")
+                summary[status] = 0
+        
+        return summary
+
+    def get_projects_by_owner(self, owner_id: str) -> List[ProjectRecord]:
+        """Get all projects for a specific owner"""
+        query = "SELECT * FROM c WHERE c.type = 'project' AND c.owner_id = @owner_id"
+        parameters = [{"name": "@owner_id", "value": owner_id}]
         
         try:
             items = list(self.container.query_items(
                 query=query,
+                parameters=parameters,
                 enable_cross_partition_query=True
             ))
-            return {item['status']: item['count'] for item in items}
+            return [ProjectRecord.from_dict(item) for item in items]
         except Exception as e:
-            raise RuntimeError(f"Failed to get status summary: {e}")
+            raise RuntimeError(f"Failed to get projects for owner {owner_id}: {e}")
+
+    def get_projects_by_tag(self, tag: str) -> List[ProjectRecord]:
+        """Get all projects containing a specific tag"""
+        query = "SELECT * FROM c WHERE c.type = 'project' AND ARRAY_CONTAINS(c.tags, @tag)"
+        parameters = [{"name": "@tag", "value": tag}]
+        
+        try:
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True
+            ))
+            return [ProjectRecord.from_dict(item) for item in items]
+        except Exception as e:
+            raise RuntimeError(f"Failed to get projects for tag {tag}: {e}")
+
+    def search_projects(self, search_term: str, limit: int = 20) -> List[ProjectRecord]:
+        """Search projects by name or description"""
+        query = """
+        SELECT * FROM c 
+        WHERE c.type = 'project' 
+        AND (CONTAINS(UPPER(c.name), UPPER(@search)) 
+             OR CONTAINS(UPPER(c.description), UPPER(@search)))
+        ORDER BY c.updated_at DESC
+        """
+        parameters = [{"name": "@search", "value": search_term}]
+        
+        try:
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True,
+                max_item_count=limit
+            ))
+            return [ProjectRecord.from_dict(item) for item in items]
+        except Exception as e:
+            raise RuntimeError(f"Failed to search projects: {e}")
+
+    def get_projects_due_soon(self, days: int = 7) -> List[ProjectRecord]:
+        """Get projects due within specified days"""
+        cutoff_date = (datetime.utcnow() + timedelta(days=days)).isoformat()
+        
+        query = """
+        SELECT * FROM c 
+        WHERE c.type = 'project' 
+        AND c.status IN ('active', 'draft')
+        AND c.due_date != null 
+        AND c.due_date <= @cutoff_date
+        ORDER BY c.due_date ASC
+        """
+        parameters = [{"name": "@cutoff_date", "value": cutoff_date}]
+        
+        try:
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True
+            ))
+            return [ProjectRecord.from_dict(item) for item in items]
+        except Exception as e:
+            raise RuntimeError(f"Failed to get projects due soon: {e}")
+
+    def get_budget_summary(self) -> dict:
+        """Get budget summary across all projects"""
+        query = """
+        SELECT 
+            SUM(c.budget) as total_budget,
+            AVG(c.budget) as average_budget,
+            MAX(c.budget) as max_budget,
+            MIN(c.budget) as min_budget
+        FROM c 
+        WHERE c.type = 'project' AND c.budget != null
+        """
+        
+        try:
+            result = list(self.container.query_items(
+                query=query,
+                enable_cross_partition_query=True
+            ))
+            
+            if result and result[0]:
+                return {
+                    "total_budget": result[0].get("total_budget", 0),
+                    "average_budget": result[0].get("average_budget", 0),
+                    "max_budget": result[0].get("max_budget", 0),
+                    "min_budget": result[0].get("min_budget", 0)
+                }
+            return {
+                "total_budget": 0,
+                "average_budget": 0,
+                "max_budget": 0,
+                "min_budget": 0
+            }
+        except Exception as e:
+            raise RuntimeError(f"Failed to get budget summary: {e}")
+
+
+# Import fix for datetime
+from datetime import timedelta
