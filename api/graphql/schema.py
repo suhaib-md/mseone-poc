@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime
 from typing import Optional, List
+from enum import Enum
 
 import strawberry
 
@@ -32,9 +33,9 @@ def decode_cursor(cursor: str | None) -> str | None:
         return None
 
 
-# GraphQL Enums
+# FIXED: GraphQL Enums - Don't extend the original enum
 @strawberry.enum
-class ProjectStatusEnum(ProjectStatus):
+class ProjectStatusEnum(Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
     DRAFT = "draft"
@@ -53,6 +54,17 @@ class OrderBy(Enum):
     UPDATED_AT = "updated_at" 
     NAME = "name"
     ID = "id"
+
+
+# Helper function to convert between enum types
+def convert_status_to_repo_enum(status: ProjectStatusEnum) -> ProjectStatus:
+    """Convert GraphQL enum to repository enum"""
+    return ProjectStatus(status.value)
+
+
+def convert_status_from_repo_enum(status: ProjectStatus) -> ProjectStatusEnum:
+    """Convert repository enum to GraphQL enum"""
+    return ProjectStatusEnum(status.value)
 
 
 # GraphQL Types
@@ -75,7 +87,7 @@ class Project:
             id=rec.id,
             name=rec.name,
             description=rec.description,
-            status=rec.status,
+            status=convert_status_from_repo_enum(rec.status),  # Convert enum
             owner_id=rec.owner_id,
             created_at=rec.created_at.isoformat(),
             updated_at=rec.updated_at.isoformat(),
@@ -206,9 +218,12 @@ class Query:
         # Clamp pagination
         first = min(max(first, 1), 50)
         
+        # Convert status enum if provided
+        repo_status = convert_status_to_repo_enum(status) if status else None
+        
         rows, has_next = repo.list_projects(
             name_contains=name_contains,
-            status=status,
+            status=repo_status,  # Use converted enum
             owner_id=owner_id,
             tags=tags,
             first=first,
@@ -223,7 +238,7 @@ class Query:
         # Get total count
         total_count = repo.get_project_count(
             name_contains=name_contains,
-            status=status,
+            status=repo_status,  # Use converted enum
             owner_id=owner_id,
             tags=tags
         )
@@ -303,6 +318,9 @@ class Mutation:
                         error="Invalid due_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
                     )
             
+            # Convert status enum
+            repo_status = convert_status_to_repo_enum(input.status) if input.status else ProjectStatus.DRAFT
+            
             request = CreateProjectRequest(
                 name=input.name,
                 description=input.description,
@@ -310,7 +328,7 @@ class Mutation:
                 tags=input.tags or [],
                 budget=input.budget,
                 due_date=due_date,
-                status=input.status or ProjectStatus.DRAFT
+                status=repo_status  # Use converted enum
             )
             
             project = repo.create_project(request)
@@ -322,7 +340,7 @@ class Mutation:
                     "mutation": "create_project",
                     "input": {
                         "name": input.name,
-                        "status": request.status.value
+                        "status": repo_status.value
                     },
                     "result": {
                         "project_id": project.id,
@@ -364,10 +382,13 @@ class Mutation:
                             error="Invalid due_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
                         )
             
+            # Convert status enum if provided
+            repo_status = convert_status_to_repo_enum(input.status) if input.status else None
+            
             request = UpdateProjectRequest(
                 name=input.name,
                 description=input.description,
-                status=input.status,
+                status=repo_status,  # Use converted enum
                 owner_id=input.owner_id,
                 tags=input.tags,
                 budget=input.budget,
