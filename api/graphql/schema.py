@@ -33,7 +33,6 @@ def decode_cursor(cursor: str | None) -> str | None:
         return None
 
 
-# FIXED: GraphQL Enums - Don't extend the original enum
 @strawberry.enum
 class ProjectStatusEnum(Enum):
     ACTIVE = "active"
@@ -181,7 +180,7 @@ class Query:
         
         if rec:
             # Save result to Blob Storage
-            storage = StorageService()
+            storage = StorageService(),
             try:
                 storage.save_result({
                     "query": "project",
