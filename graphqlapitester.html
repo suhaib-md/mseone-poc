@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphQL API Tester</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 2rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-family: 'Monaco', 'Courier New', monospace;
+            box-sizing: border-box;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .preset-button {
+            background: linear-gradient(45deg, #48bb78, #38a169);
+            padding: 8px 16px;
+            font-size: 14px;
+            margin: 4px;
+            display: inline-block;
+        }
+        
+        .preset-button:hover {
+            background: linear-gradient(45deg, #38a169, #2f855a);
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result h3 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        
+        .result pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .error {
+            border-left-color: #f56565;
+            background: #fed7d7;
+        }
+        
+        .success {
+            border-left-color: #48bb78;
+            background: #c6f6d5;
+        }
+        
+        .warning {
+            border-left-color: #ed8936;
+            background: #feebc8;
+        }
+        
+        .preset-queries {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #edf2f7;
+            border-radius: 8px;
+        }
+        
+        .preset-queries h3 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        
+        .cors-help {
+            margin-top: 20px;
+            padding: 16px;
+            background: #bee3f8;
+            border-radius: 8px;
+            border-left: 4px solid #3182ce;
+        }
+        
+        .cors-help h4 {
+            margin-top: 0;
+            color: #2c5282;
+        }
+        
+        .cors-help code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .loading {
+            opacity: 0.7;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-connecting { background-color: #ed8936; }
+        .status-connected { background-color: #48bb78; }
+        .status-error { background-color: #f56565; }
+        
+        .headers-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f0f4f8;
+            border-radius: 8px;
+        }
+        
+        .header-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .header-input input {
+            margin-bottom: 0;
+        }
+        
+        .remove-header {
+            background: #f56565;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 GraphQL API Tester</h1>
+        
+        <div class="form-group">
+            <label for="endpoint">
+                <span class="status-indicator" id="status-indicator"></span>
+                GraphQL Endpoint:
+            </label>
+            <input type="text" id="endpoint" value="http://localhost:8001/graphql">
+        </div>
+        
+        <div class="form-group">
+            <label for="token">Bearer Token:</label>
+            <input type="text" id="token" value="devtoken123">
+        </div>
+        
+        <div class="headers-section">
+            <h4>Custom Headers:</h4>
+            <div id="custom-headers">
+                <!-- Custom headers will be added here -->
+            </div>
+            <button onclick="addCustomHeader()" style="font-size: 14px; padding: 6px 12px;">+ Add Header</button>
+        </div>
+        
+        <div class="preset-queries">
+            <h3>📝 Preset Queries:</h3>
+            <button class="preset-button" onclick="loadQuery('list')">List Projects</button>
+            <button class="preset-button" onclick="loadQuery('summary')">Project Summary</button>
+            <button class="preset-button" onclick="loadQuery('create')">Create Project</button>
+            <button class="preset-button" onclick="loadQuery('getById')">Get by ID</button>
+            <button class="preset-button" onclick="loadQuery('filter')">Filter Active</button>
+            <button class="preset-button" onclick="loadQuery('introspection')">Schema Info</button>
+        </div>
+        
+        <div class="form-group">
+            <label for="query">GraphQL Query/Mutation:</label>
+            <textarea id="query" placeholder="Enter your GraphQL query here...">
+{
+  projects(first: 5) {
+    totalCount
+    edges {
+      node {
+        id
+        name
+        status
+        budget
+        tags
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="variables">Variables (JSON):</label>
+            <textarea id="variables" placeholder='{"first": 5}' style="min-height: 80px;">{}</textarea>
+        </div>
+        
+        <button id="execute-btn" onclick="executeQuery()">🚀 Execute Query</button>
+        <button onclick="clearResult()">🗑️ Clear Result</button>
+        <button onclick="testConnection()">🔗 Test Connection</button>
+        
+        <div id="result"></div>
+        
+        <div class="cors-help" id="cors-help" style="display: none;">
+            <h4>🛠️ CORS Error Help</h4>
+            <p>Your GraphQL server needs to allow CORS requests. Add this to your server:</p>
+            
+            <p><strong>Express.js + Apollo Server:</strong></p>
+            <code>
+const cors = require('cors');<br>
+app.use(cors());
+            </code>
+            
+            <p><strong>Alternative solutions:</strong></p>
+            <ul>
+                <li>Use a browser extension like "CORS Unblock" for testing</li>
+                <li>Run Chrome with <code>--disable-web-security --user-data-dir</code> flags</li>
+                <li>Serve this HTML file from a web server instead of opening it directly</li>
+                <li>Use a tool like GraphiQL or GraphQL Playground instead</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const presetQueries = {
+            list: {
+                query: `{
+  projects(first: 5) {
+    totalCount
+    edges {
+      node {
+        id
+        name
+        status
+        budget
+        tags
+        ownerId
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}`,
+                variables: '{}'
+            },
+            summary: {
+                query: `{
+  projectSummary {
+    totalProjects
+    activeProjects
+    archivedProjects
+    draftProjects
+    completedProjects
+  }
+}`,
+                variables: '{}'
+            },
+            create: {
+                query: `mutation {
+  createProject(input: {
+    name: "Test Project from UI"
+    description: "Created using the test interface"
+    status: ACTIVE
+    tags: ["ui-test", "demo"]
+    budget: 25000
+    ownerId: "test_user"
+  }) {
+    success
+    error
+    project {
+      id
+      name
+      status
+      createdAt
+      updatedAt
+    }
+  }
+}`,
+                variables: '{}'
+            },
+            getById: {
+                query: `{
+  project(id: "proj_apollo_001") {
+    id
+    name
+    description
+    status
+    tags
+    budget
+    dueDate
+    ownerId
+    createdAt
+    updatedAt
+  }
+}`,
+                variables: '{}'
+            },
+            filter: {
+                query: `{
+  projects(status: ACTIVE, first: 10) {
+    totalCount
+    edges {
+      node {
+        id
+        name
+        status
+        ownerId
+        budget
+        tags
+      }
+    }
+  }
+}`,
+                variables: '{}'
+            },
+            introspection: {
+                query: `{
+  __schema {
+    types {
+      name
+      kind
+      description
+    }
+  }
+}`,
+                variables: '{}'
+            }
+        };
+
+        let customHeaders = [];
+
+        function loadQuery(type) {
+            const preset = presetQueries[type];
+            if (preset) {
+                document.getElementById('query').value = preset.query;
+                document.getElementById('variables').value = preset.variables;
+            }
+        }
+
+        function addCustomHeader() {
+            const headerId = Date.now();
+            customHeaders.push({ id: headerId, key: '', value: '' });
+            renderCustomHeaders();
+        }
+
+        function removeCustomHeader(id) {
+            customHeaders = customHeaders.filter(h => h.id !== id);
+            renderCustomHeaders();
+        }
+
+        function renderCustomHeaders() {
+            const container = document.getElementById('custom-headers');
+            container.innerHTML = customHeaders.map(header => `
+                <div class="header-input">
+                    <input type="text" placeholder="Header name" value="${header.key}" 
+                           onchange="updateCustomHeader(${header.id}, 'key', this.value)" style="flex: 1;">
+                    <input type="text" placeholder="Header value" value="${header.value}"
+                           onchange="updateCustomHeader(${header.id}, 'value', this.value)" style="flex: 2;">
+                    <button class="remove-header" onclick="removeCustomHeader(${header.id})">×</button>
+                </div>
+            `).join('');
+        }
+
+        function updateCustomHeader(id, field, value) {
+            const header = customHeaders.find(h => h.id === id);
+            if (header) {
+                header[field] = value;
+            }
+        }
+
+        function updateStatus(status) {
+            const indicator = document.getElementById('status-indicator');
+            indicator.className = `status-indicator status-${status}`;
+        }
+
+        async function testConnection() {
+            const endpoint = document.getElementById('endpoint').value;
+            const token = document.getElementById('token').value;
+            
+            updateStatus('connecting');
+            
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        ...getCustomHeadersObject()
+                    },
+                    body: JSON.stringify({
+                        query: '{ __typename }'
+                    })
+                });
+
+                if (response.ok) {
+                    updateStatus('connected');
+                    showResult('✅ Connection successful!', 'success');
+                } else {
+                    updateStatus('error');
+                    showResult(`❌ Connection failed: HTTP ${response.status}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('error');
+                if (error.message.includes('CORS') || error.message.includes('fetch')) {
+                    showCorsHelp();
+                    showResult('❌ CORS Error: ' + error.message, 'error');
+                } else {
+                    showResult('❌ Connection error: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function getCustomHeadersObject() {
+            const headers = {};
+            customHeaders.forEach(header => {
+                if (header.key && header.value) {
+                    headers[header.key] = header.value;
+                }
+            });
+            return headers;
+        }
+
+        async function executeQuery() {
+            const endpoint = document.getElementById('endpoint').value;
+            const token = document.getElementById('token').value;
+            const query = document.getElementById('query').value;
+            const variables = document.getElementById('variables').value;
+            const executeBtn = document.getElementById('execute-btn');
+
+            executeBtn.disabled = true;
+            executeBtn.textContent = '⏳ Executing...';
+            document.getElementById('cors-help').style.display = 'none';
+
+            let parsedVariables = {};
+            try {
+                if (variables.trim()) {
+                    parsedVariables = JSON.parse(variables);
+                }
+            } catch (e) {
+                showResult('❌ Error parsing variables JSON: ' + e.message, 'error');
+                resetButton();
+                return;
+            }
+
+            const payload = {
+                query: query,
+                variables: parsedVariables
+            };
+
+            try {
+                updateStatus('connecting');
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        ...getCustomHeadersObject()
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    updateStatus('connected');
+                    if (result.errors) {
+                        showResult(JSON.stringify(result, null, 2), 'warning');
+                    } else {
+                        showResult(JSON.stringify(result, null, 2), 'success');
+                    }
+                } else {
+                    updateStatus('error');
+                    showResult(
+                        `❌ HTTP ${response.status}: ${JSON.stringify(result, null, 2)}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                updateStatus('error');
+                if (error.message.includes('CORS') || error.name === 'TypeError') {
+                    showCorsHelp();
+                    showResult('❌ CORS Error: Cannot connect to server. See help below.', 'error');
+                } else {
+                    showResult('❌ Network error: ' + error.message, 'error');
+                }
+            }
+            
+            resetButton();
+        }
+
+        function resetButton() {
+            const executeBtn = document.getElementById('execute-btn');
+            executeBtn.disabled = false;
+            executeBtn.textContent = '🚀 Execute Query';
+        }
+
+        function showResult(content, type = 'success') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            
+            let icon = '✅';
+            let title = 'Result';
+            
+            if (type === 'error') {
+                icon = '❌';
+                title = 'Error';
+            } else if (type === 'warning') {
+                icon = '⚠️';
+                title = 'Warning - Check Errors';
+            }
+            
+            resultDiv.innerHTML = `
+                <h3>${icon} ${title}</h3>
+                <pre>${content}</pre>
+            `;
+        }
+
+        function showCorsHelp() {
+            document.getElementById('cors-help').style.display = 'block';
+        }
+
+        function clearResult() {
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('cors-help').style.display = 'none';
+            updateStatus('');
+        }
+
+        // Initialize with some common headers
+        function initializeHeaders() {
+            // Start with no custom headers, but ready to add them
+        }
+
+        // Load default query on page load
+        window.onload = function() {
+            loadQuery('list');
+            initializeHeaders();
+            updateStatus('');
+        };
+
+        // Auto-save form state to prevent loss
+        function saveFormState() {
+            const state = {
+                endpoint: document.getElementById('endpoint').value,
+                token: document.getElementById('token').value,
+                query: document.getElementById('query').value,
+                variables: document.getElementById('variables').value,
+                customHeaders: customHeaders
+            };
+            
+            // Store in a simple variable since localStorage isn't available
+            window.formState = state;
+        }
+
+        function restoreFormState() {
+            if (window.formState) {
+                const state = window.formState;
+                document.getElementById('endpoint').value = state.endpoint || 'http://localhost:8001/graphql';
+                document.getElementById('token').value = state.token || 'devtoken123';
+                document.getElementById('query').value = state.query || '';
+                document.getElementById('variables').value = state.variables || '{}';
+                customHeaders = state.customHeaders || [];
+                renderCustomHeaders();
+            }
+        }
+
+        // Auto-save on input changes
+        document.addEventListener('input', saveFormState);
+        
+        // Restore state on load
+        document.addEventListener('DOMContentLoaded', restoreFormState);
+    </script>
+</body>
+</html>

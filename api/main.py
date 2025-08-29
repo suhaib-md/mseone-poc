@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 
 from api.graphql.schema import schema
@@ -16,6 +17,21 @@ else:
 
 # Create FastAPI app first
 app = FastAPI(title="mseONE PoC API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if ENV == "local" else [
+        "https://pocapi-web.azurewebsites.net",  # Replace with your production domains
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8001",
+        "http://127.0.0.1:5500"  # Live Server default port
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Create GraphQL router
 graphql_app = GraphQLRouter(schema)
