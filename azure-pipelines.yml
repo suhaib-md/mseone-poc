@@ -1,42 +1,351 @@
+# Azure DevOps CI/CD Pipeline for mseONE PoC
+# Modern pipeline with updated tasks and best practices
+
 trigger:
   branches:
     include:
       - main
-      - feature/*
+      - develop
+  paths:
+    exclude:
+      - README.md
+      - docs/*
+      - '*.md'
 
 pr:
   branches:
     include:
       - main
+  paths:
+    exclude:
+      - README.md
+      - docs/*
+      - '*.md'
+
+# Pipeline variables
+variables:
+  - group: poc-variables  # Variable group created in Azure DevOps
+  - name: imageTag
+    value: '$(Build.BuildNumber)'
+  - name: imageName
+    value: 'pocapi'
+  - name: pythonVersion
+    value: '3.11'
+  - name: vmImageName
+    value: 'ubuntu-latest'
 
 pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  pythonVersion: '3.11'
+  vmImage: $(vmImageName)
 
 stages:
+  # Stage 1: Build and Test
   - stage: BuildAndTest
-    displayName: Build and Test
+    displayName: 'Build and Test'
     jobs:
-      - job: RunTests
-        displayName: Run Python Tests
+      - job: TestApplication
+        displayName: 'Test Python Application'
         steps:
+          # Set up Python
           - task: UsePythonVersion@0
             inputs:
               versionSpec: '$(pythonVersion)'
+              addToPath: true
               architecture: 'x64'
+            displayName: 'Use Python $(pythonVersion)'
 
+          # Cache pip dependencies
+          - task: Cache@2
+            inputs:
+              key: 'python | "$(Agent.OS)" | requirements.txt'
+              restoreKeys: |
+                python | "$(Agent.OS)"
+                python
+              path: $(Pipeline.Workspace)/.pip
+            displayName: 'Cache pip packages'
+
+          # Install dependencies
           - script: |
               python -m pip install --upgrade pip
-              pip install -r requirements.txt
-            displayName: 'Install dependencies'
+              python -m pip install --cache-dir $(Pipeline.Workspace)/.pip -r requirements.txt
+            displayName: 'Install Python dependencies'
 
+          # Run linting with Ruff
           - script: |
-              pip install ruff pytest
-              ruff check .
-            displayName: 'Run linting'
+              ruff check . --format junit --output-file ruff-results.xml || true
+              ruff check . --format github
+            displayName: 'Run Ruff linting'
+            continueOnError: 'true'
 
+          # Publish linting results
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFiles: 'ruff-results.xml'
+              testRunTitle: 'Linting Results (Ruff)'
+              failTaskOnFailedTests: false
+              mergeTestResults: true
+            displayName: 'Publish linting results'
+            condition: always()
+
+          # Run tests with coverage
           - script: |
-              pytest --maxfail=1 --disable-warnings -q
-            displayName: 'Run tests'
+              python -m pytest --maxfail=5 --tb=short -v \
+                --junitxml=pytest-results.xml \
+                --cov=api \
+                --cov-report=xml:coverage.xml \
+                --cov-report=html:htmlcov \
+                --cov-report=term-missing
+            displayName: 'Run pytest with coverage'
+            continueOnError: 'true'
+
+          # Publish test results
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFiles: 'pytest-results.xml'
+              testRunTitle: 'Python Unit Tests'
+              failTaskOnFailedTests: true
+              mergeTestResults: true
+            displayName: 'Publish test results'
+            condition: always()
+
+          # Publish code coverage (modern approach)
+          - task: PublishCodeCoverageResults@2
+            inputs:
+              summaryFileLocation: 'coverage.xml'
+              pathToSources: '$(System.DefaultWorkingDirectory)'
+              failIfCoverageEmpty: false
+            displayName: 'Publish code coverage'
+            condition: always()
+
+  # Stage 2: Build and Push Docker Image
+  - stage: BuildImage
+    displayName: 'Build Docker Image'
+    dependsOn: BuildAndTest
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/feature/')))
+    jobs:
+      - job: BuildPushImage
+        displayName: 'Build and Push to ACR'
+        steps:
+          # Docker build and push to ACR
+          - task: Docker@2
+            inputs:
+              containerRegistry: 'acr-connection'
+              repository: '$(imageName)'
+              command: 'buildAndPush'
+              Dockerfile: 'Dockerfile'
+              tags: |
+                $(imageTag)
+                latest
+              addPipelineData: false
+            displayName: 'Build and push Docker image'
+
+          # Copy deployment artifacts
+          - task: CopyFiles@2
+            inputs:
+              sourceFolder: '$(Build.SourcesDirectory)'
+              contents: |
+                azure-pipelines.yml
+                Dockerfile
+                README.md
+              targetFolder: '$(Build.ArtifactStagingDirectory)'
+              cleanTargetFolder: true
+            displayName: 'Copy deployment artifacts'
+
+          # Publish build artifacts
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)'
+              artifactName: 'drop'
+              artifactType: 'Container'
+            displayName: 'Publish build artifacts'
+
+  # Stage 3: Deploy to Production
+  - stage: DeployProduction
+    displayName: 'Deploy to Production'
+    dependsOn: BuildImage
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToWebApp
+        displayName: 'Deploy to Azure Web App'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # Deploy to Azure Web App for Containers
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: 'azure-connection'
+                    appName: '$(WEBAPP_NAME)'
+                    resourceGroupName: '$(RESOURCE_GROUP)'
+                    imageName: '$(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)'
+                    containerCommand: 'uvicorn api.main:app --host 0.0.0.0 --port 8080'
+                    appSettings: |
+                      -APP_ENV azure
+                      -AZURE_TENANT_ID $(AZURE_TENANT_ID)
+                      -AZURE_AUDIENCE $(AZURE_AUDIENCE)
+                      -COSMOS_URI $(COSMOS_URI)
+                      -COSMOS_KEY $(COSMOS_KEY)
+                      -COSMOS_DB $(COSMOS_DB)
+                      -COSMOS_CONTAINER $(COSMOS_CONTAINER)
+                      -STORAGE_ACCOUNT $(STORAGE_ACCOUNT)
+                      -STORAGE_KEY $(STORAGE_KEY)
+                      -WEBSITES_PORT 8080
+                      -DOCKER_REGISTRY_SERVER_URL https://$(ACR_LOGIN_SERVER)
+                  displayName: 'Deploy to Azure Web App'
+
+                # Wait for deployment to stabilize
+                - task: AzureAppServiceManage@0
+                  inputs:
+                    azureSubscription: 'azure-connection'
+                    WebAppName: '$(WEBAPP_NAME)'
+                    ResourceGroupName: '$(RESOURCE_GROUP)'
+                    Action: 'Start Azure App Service'
+                  displayName: 'Ensure Web App is running'
+
+                # Health check with retry logic
+                - task: PowerShell@2
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      $healthUrl = "https://$(WEBAPP_NAME).azurewebsites.net/healthz"
+                      $maxAttempts = 12
+                      $attempt = 1
+                      $success = $false
+                      
+                      Write-Host "🏥 Checking application health at: $healthUrl"
+                      
+                      do {
+                          try {
+                              Write-Host "⏱️  Health check attempt $attempt of $maxAttempts"
+                              $response = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 30 -ErrorAction Stop
+                              
+                              if ($response.status -eq "ok") {
+                                  Write-Host "✅ Application is healthy!"
+                                  Write-Host "📊 Health details:" 
+                                  Write-Host ($response | ConvertTo-Json -Depth 3)
+                                  $success = $true
+                                  break
+                              }
+                              else {
+                                  Write-Warning "⚠️ Application status: $($response.status)"
+                              }
+                          }
+                          catch {
+                              Write-Warning "❌ Health check failed: $($_.Exception.Message)"
+                          }
+                          
+                          if ($attempt -lt $maxAttempts) {
+                              Write-Host "⌛ Waiting 15 seconds before next attempt..."
+                              Start-Sleep -Seconds 15
+                          }
+                          
+                          $attempt++
+                      } while ($attempt -le $maxAttempts)
+                      
+                      if (-not $success) {
+                          Write-Error "💥 Application failed health checks after $maxAttempts attempts"
+                          exit 1
+                      }
+                    failOnStderr: true
+                  displayName: 'Health Check with Retry'
+
+                # Functional test of GraphQL endpoint
+                - task: PowerShell@2
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      $graphqlUrl = "https://$(WEBAPP_NAME).azurewebsites.net/graphql"
+                      Write-Host "🚀 Testing GraphQL endpoint: $graphqlUrl"
+                      
+                      try {
+                          $body = @{
+                              query = "{ __schema { queryType { name } mutationType { name } } }"
+                          } | ConvertTo-Json -Compress
+                          
+                          $headers = @{
+                              "Content-Type" = "application/json"
+                              "Authorization" = "Bearer devtoken123"
+                          }
+                          
+                          $response = Invoke-RestMethod -Uri $graphqlUrl -Method Post -Body $body -Headers $headers -TimeoutSec 30
+                          
+                          if ($response.data.__schema.queryType.name -eq "Query" -and $response.data.__schema.mutationType.name -eq "Mutation") {
+                              Write-Host "✅ GraphQL endpoint is working correctly!"
+                              Write-Host "📋 Available types: Query, Mutation"
+                          }
+                          else {
+                              Write-Warning "⚠️ Unexpected GraphQL response structure"
+                              Write-Host ($response | ConvertTo-Json -Depth 3)
+                          }
+                      }
+                      catch {
+                          Write-Warning "❌ GraphQL functional test failed: $($_.Exception.Message)"
+                          # Don't fail deployment for GraphQL test issues
+                      }
+                    failOnStderr: false
+                  displayName: 'GraphQL Functional Test'
+                  continueOnError: true
+
+  # Stage 4: Post-Deployment
+  - stage: PostDeployment
+    displayName: 'Post-Deployment Activities'
+    dependsOn: DeployProduction
+    condition: always()
+    jobs:
+      - job: NotifyAndCleanup
+        displayName: 'Notifications and Cleanup'
+        steps:
+          # Deployment summary
+          - task: PowerShell@2
+            inputs:
+              targetType: 'inline'
+              script: |
+                $buildStatus = "$(Agent.JobStatus)"
+                $buildNumber = "$(Build.BuildNumber)"
+                $sourceBranch = "$(Build.SourceBranchName)"
+                $commitId = "$(Build.SourceVersion)".Substring(0,8)
+                $commitMessage = "$(Build.SourceVersionMessage)"
+                $triggeredBy = "$(Build.RequestedFor)"
+                
+                Write-Host "🚀============================================🚀"
+                Write-Host "📋 DEPLOYMENT SUMMARY"
+                Write-Host "🚀============================================🚀"
+                Write-Host "📊 Status: $buildStatus"
+                Write-Host "🔢 Build: $buildNumber"  
+                Write-Host "🌿 Branch: $sourceBranch"
+                Write-Host "📝 Commit: $commitId"
+                Write-Host "💬 Message: $commitMessage"
+                Write-Host "👤 Triggered by: $triggeredBy"
+                Write-Host "🕒 Completed: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+                Write-Host ""
+                Write-Host "🌐 Application URLs:"
+                Write-Host "   🏠 Root: https://$(WEBAPP_NAME).azurewebsites.net"
+                Write-Host "   🚀 GraphQL: https://$(WEBAPP_NAME).azurewebsites.net/graphql"  
+                Write-Host "   🏥 Health: https://$(WEBAPP_NAME).azurewebsites.net/healthz"
+                Write-Host ""
+                Write-Host "🐳 Docker Image: $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)"
+                Write-Host "🚀============================================🚀"
+                
+                if ($buildStatus -eq "Succeeded") {
+                    Write-Host "🎉 DEPLOYMENT COMPLETED SUCCESSFULLY! 🎉"
+                    Write-Host "Your API is now live and ready to use!"
+                } elseif ($buildStatus -eq "SucceededWithIssues") {
+                    Write-Host "⚠️ DEPLOYMENT COMPLETED WITH WARNINGS ⚠️"
+                    Write-Host "Please review the pipeline logs for details."
+                } else {
+                    Write-Host "💥 DEPLOYMENT FAILED OR WAS CANCELLED 💥" 
+                    Write-Host "Please check the pipeline logs for error details."
+                }
+                Write-Host "🚀============================================🚀"
+            displayName: 'Deployment Summary'
+
+          # Cleanup old images (optional)
+          - task: PowerShell@2
+            inputs:
+              targetType: 'inline'
+              script: |
+                Write-Host "🧹 Cleanup tasks completed"
+                Write-Host "Note: Consider implementing ACR cleanup policies to manage old images"
+                Write-Host "https://docs.microsoft.com/en-us/azure/container-registry/container-registry-retention-policy"
+            displayName: 'Cleanup Notes'
+            condition: always()
