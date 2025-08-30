@@ -1,0 +1,748 @@
+{
+	"info": {
+		"_postman_id": "8386bf82-7e8c-47e2-ad51-f33a69c18a3d",
+		"name": "mseONE PoC API",
+		"description": "This collection contains requests for the mseONE PoC API.\n\nThe API is built with FastAPI + Strawberry (GraphQL) and is designed to expose project metadata with filtering and pagination.\n\n### Authentication\n\nAll requests to `/graphql` require a Bearer token.  \nFor local development use:  \nAuthorization: Bearer devtoken123\n\nThe `/healthz` endpoint does not require authentication.\n\n### Base URL\n\n- Local: [http://localhost:8001](http://localhost:8001)\n    \n- (later) Azure Deployed: https://.azurewebsites.net\n    \n\n### Contents\n\n- Health Check (REST GET)\n    \n- GraphQL – Project By ID\n    \n- GraphQL – Projects List (with filtering and pagination)\n    \n\n### Notes\n\n- Results will later be persisted to Azure Storage.\n    \n- In Phase 2, the API will validate Azure AD tokens instead of the local dev token.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "41789439"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "devtoken123",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/healthz",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"healthz"
+					]
+				},
+				"description": "Simple health endpoint to verify that the API is up and running.\n\n### Method\n\nGET /healthz\n\n### Authentication\n\nNot required.\n\n### Response\n\n200 OK  \n{  \n\"status\": \"ok\"  \n}"
+			},
+			"response": []
+		},
+		{
+			"name": "Project by ID",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "devtoken123",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ project(id: \\\"proj_apollo_001\\\") { id name status description budget tags ownerId createdAt updatedAt dueDate } }\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/graphql",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"graphql"
+					]
+				},
+				"description": "Fetch metadata for a single project by its numeric ID.\n\n### Method\n\nPOST /graphql\n\n### Query\n\n{  \nproject(id: 1) {  \nid  \nname  \nstatus  \n}  \n}\n\n### Variables\n\nNot required.\n\n### Authentication\n\nRequired: Authorization: Bearer devtoken123\n\n### Response\n\n{  \n\"data\": {  \n\"project\": {  \n\"id\": \"1\",  \n\"name\": \"Apollo\",  \n\"status\": \"active\"  \n}  \n}  \n}"
+			},
+			"response": []
+		},
+		{
+			"name": "Projects List",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "devtoken123",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ projects(first: 5) { totalCount edges { node { id name status createdAt } } pageInfo { hasNextPage endCursor } } }\"\r\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/graphql",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"graphql"
+					]
+				},
+				"description": "Fetch a list of projects, with optional filters and cursor-based pagination.\n\n### Method\n\nPOST /graphql\n\n### Query\n\nquery($first:Int!, $name:String, $after:String){  \nprojects(first:$first, nameContains:$name, after:$after){  \ntotalCount  \nedges { cursor node { id name status } }  \npageInfo { hasNextPage endCursor }  \n}  \n}\n\n### Variables\n\n{  \n\"first\": 2,  \n\"name\": \"o\"  \n}\n\n- `first`: number of results to fetch (max 50)\n    \n- `name`: optional substring filter on project name\n    \n- `after`: optional cursor for pagination\n    \n\n### Authentication\n\nRequired: Authorization: Bearer devtoken123\n\n### Response (example)\n\n{  \n\"data\": {  \n\"projects\": {  \n\"totalCount\": 3,  \n\"edges\": \\[  \n{ \"cursor\": \"cGlkOjI=\", \"node\": { \"id\": \"2\", \"name\": \"Zephyr\", \"status\": \"active\" }},  \n{ \"cursor\": \"cGlkOjQ=\", \"node\": { \"id\": \"4\", \"name\": \"Orion\", \"status\": \"active\" }}  \n\\],  \n\"pageInfo\": {  \n\"hasNextPage\": true,  \n\"endCursor\": \"cGlkOjQ=\"  \n}  \n}  \n}  \n}"
+			},
+			"response": []
+		},
+		{
+			"name": "Project by ID docker local",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ project(id: 1) { id name status } }\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8089/graphql",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8089",
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Project by ID Azure",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ project(id: 1) { id name status } }\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Health Check Azure",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/healthz\n",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"healthz\n"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Projects (Basic)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ projects(first: 5) { totalCount edges { node { id name status createdAt } } pageInfo { hasNextPage endCursor } } }\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Single Project by ID",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ project(id: \\\"proj_apollo_001\\\") { id name status description budget tags ownerId createdAt updatedAt dueDate } }\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Project Summary",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"{ projectSummary { totalProjects activeProjects archivedProjects draftProjects completedProjects } }\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Filter by Status",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($status: ProjectStatusEnum!) { projects(status: $status, first: 10) { totalCount edges { node { id name status ownerId budget } } } }\",\r\n  \"variables\": {\r\n    \"status\": \"ACTIVE\"\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Filter by Name (Contains)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($nameContains: String!) { projects(nameContains: $nameContains, first: 10) { totalCount edges { node { id name description status } } } }\",\r\n  \"variables\": {\r\n    \"nameContains\": \"Apollo\"\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Filter by Owner",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($ownerId: String!) { projects(ownerId: $ownerId, first: 10) { totalCount edges { node { id name ownerId status budget } } } }\",\r\n  \"variables\": {\r\n    \"ownerId\": \"user_jane_doe\"\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Filter by Tags",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($tags: [String!]!) { projects(tags: $tags, first: 10) { totalCount edges { node { id name tags status } } } }\",\r\n  \"variables\": {\r\n    \"tags\": [\"space\"]\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Complex Multi-Filter",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"query($status: ProjectStatusEnum!, $tags: [String!], $nameContains: String) { projects(status: $status, tags: $tags, nameContains: $nameContains, first: 5) { totalCount edges { node { id name status tags ownerId budget dueDate } } } }\",\r\n  \"variables\": {\r\n    \"status\": \"ACTIVE\",\r\n    \"tags\": [\"renewable\"],\r\n    \"nameContains\": \"wind\"\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create Project (Minimal)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"mutation($input: CreateProjectInput!) { createProject(input: $input) { success error project { id name status createdAt updatedAt } } }\",\r\n  \"variables\": {\r\n    \"input\": {\r\n      \"name\": \"Test Project Minimal New\"\r\n    }\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create Project (Full Details)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"mutation($input: CreateProjectInput!) { createProject(input: $input) { success error project { id name status description ownerId tags budget dueDate createdAt updatedAt } } }\",\r\n  \"variables\": {\r\n    \"input\": {\r\n      \"name\": \"Advanced Test Project\",\r\n      \"description\": \"A comprehensive test project created via Postman\",\r\n      \"status\": \"ACTIVE\",\r\n      \"ownerId\": \"user_postman_test\",\r\n      \"tags\": [\"postman\", \"test\", \"api\"],\r\n      \"budget\": 150000.50,\r\n      \"dueDate\": \"2025-12-31T23:59:59\"\r\n    }\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Update Project",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"mutation($id: ID!, $input: UpdateProjectInput!) { updateProject(id: $id, input: $input) { success error project { id name status description budget updatedAt } } }\",\r\n  \"variables\": {\r\n    \"id\": \"proj_1756477327202\",\r\n    \"input\": {\r\n      \"name\": \"Updated Test Project Name\",\r\n      \"description\": \"Updated description via Postman\",\r\n      \"status\": \"COMPLETED\",\r\n      \"budget\": 175000.00\r\n    }\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Project",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"mutation($id: ID!) { deleteProject(id: $id) { success projectId error } }\",\r\n  \"variables\": {\r\n    \"id\": \"proj_1756477327202\"\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"query\": \"mutation($input: CreateProjectInput!) { createProject(input: $input) { success error project { id name status createdAt updatedAt } } }\",\r\n  \"variables\": {\r\n    \"input\": {\r\n      \"name\": \"Test Project Minimal\"\r\n    }\r\n  }\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://pocapi-web.azurewebsites.net/graphql",
+					"protocol": "https",
+					"host": [
+						"pocapi-web",
+						"azurewebsites",
+						"net"
+					],
+					"path": [
+						"graphql"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "oauth2",
+		"oauth2": [
+			{
+				"key": "scope",
+				"value": "api://{{RESOURCE_APP_ID}}/.default",
+				"type": "string"
+			},
+			{
+				"key": "clientSecret",
+				"value": "{{CLIENT_SECRET}}",
+				"type": "string"
+			},
+			{
+				"key": "clientId",
+				"value": "{{CLIENT_ID}}",
+				"type": "string"
+			},
+			{
+				"key": "accessTokenUrl",
+				"value": "https://login.microsoftonline.com/{{TENANT_ID}}/oauth2/v2.0/token",
+				"type": "string"
+			},
+			{
+				"key": "grant_type",
+				"value": "client_credentials",
+				"type": "string"
+			},
+			{
+				"key": "addTokenTo",
+				"value": "header",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "TENANT_ID",
+			"value": "{{TENANT_ID}}",
+			"type": "string"
+		},
+		{
+			"key": "CLIENT_ID",
+			"value": "{{CLIENT_ID}}",
+			"type": "string"
+		},
+		{
+			"key": "CLIENT_SECRET",
+			"value": "{{CLIENT_SECRET}}",
+			"type": "string"
+		},
+		{
+			"key": "RESOURCE_APP_ID",
+			"value": "5551da76-8fe1-4a20-ac0f-6f817cc75f2f",
+			"type": "string"
+		}
+	]
+}
