@@ -1,163 +1,252 @@
-# mseONE Proof of Concept API
+# mseONE PoC API
 
-This repository contains the source code for the mseONE Proof of Concept (PoC) API, a secure, scalable, and well-documented GraphQL API for managing project metadata. Built with Python, FastAPI, and Strawberry, and deployed on Microsoft Azure, this project demonstrates an end-to-end process of building, deploying, and automating a modern API.
+A modern FastAPI-based GraphQL API for project management with Azure Cosmos DB integration, authentication, and comprehensive CI/CD pipeline.
 
-## Project Overview
+## 🚀 Features
 
-[cite\_start]The primary objective of this PoC is to showcase the ability to design, develop, and deploy APIs with secure integration to internal systems and Azure-based services[cite: 5502]. [cite\_start]It serves as a practical, hands-on guide covering the entire development lifecycle, from initial setup and local development to cloud deployment, security integration, and automated execution[cite: 5].
+- **GraphQL API** with full CRUD operations for projects
+- **Azure Cosmos DB** integration for scalable data storage
+- **Dual Authentication** - Local dev tokens and Azure AD JWT validation
+- **Docker Support** with multi-stage builds for production
+- **Azure DevOps CI/CD** with automated testing and deployment
+- **Comprehensive Testing** with pytest and coverage reporting
+- **Code Quality** with Ruff linting and Black formatting
+- **Health Checks** and monitoring endpoints
+- **Blob Storage** integration for API result logging
 
-The project is divided into the following logical phases:
+## 📋 Table of Contents
 
-1.  [cite\_start]**Develop a GraphQL API**: An API built from scratch using Python to perform CRUD operations on project data, including advanced filtering and pagination[cite: 9].
-2.  [cite\_start]**Connect to a Cloud Database**: The API connects to Azure Cosmos DB for persistent storage and retrieval of project information[cite: 10].
-3.  [cite\_start]**Implement Security**: The API is secured using Azure Active Directory (Azure AD) to ensure that only authorized clients can access the data by validating JWT access tokens[cite: 11].
-4.  [cite\_start]**Containerize the Application**: The Python application and all its dependencies are packaged into a Docker container for portability and consistent execution in any environment[cite: 12, 13].
-5.  **Deploy to Azure**: The Docker container is deployed to the cloud using Azure Web App for Containers, making the API accessible over the internet. [cite\_start]Secrets and configuration are managed securely using Azure Key Vault[cite: 14, 15].
-6.  [cite\_start]**Persist API Results**: The API is enhanced to automatically save the results of queries to Azure Blob Storage for logging, auditing, and persistence[cite: 16].
-7.  [cite\_start]**Automate with Logic Apps**: An automated workflow is built using Azure Logic Apps that calls the API on a schedule, handles success and failure cases, logs results, and sends notifications[cite: 17].
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [Development](#development)
+- [GraphQL Schema](#graphql-schema)
+- [API Endpoints](#api-endpoints)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Docker](#docker)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 
-## Architectural Flow
+## 🔧 Prerequisites
 
-The following diagram illustrates the architectural flow of the mseONE PoC API:
+### Local Development
+- Python 3.11+
+- pip or poetry
+- Azure Cosmos DB account
+- Azure Storage account (optional, for logging)
 
-A step-by-step walkthrough of how all the components work together in the final solution:
+### Production Deployment
+- Azure Container Registry (ACR)
+- Azure Web App for Containers
+- Azure DevOps with service connections
 
-1.  **Development & CI**: A developer writes code for the API. [cite\_start]When the code is pushed to the repository, an Azure Pipeline is triggered, which automatically runs quality checks (linting) and executes the automated tests to ensure the code is valid[cite: 26, 27].
-2.  **Containerization**: The application is packaged into a Docker image using the Dockerfile. [cite\_start]This image contains the Python application, its dependencies, and instructions on how to run it[cite: 28, 29].
-3.  **Deployment**: The Docker image is pushed to the Azure Container Registry. [cite\_start]The Azure Web App service pulls this image and runs it, making the GraphQL API live and accessible on the internet[cite: 30, 31].
-4.  **Orchestration (The Automated Workflow)**:
-      * [cite\_start]An Azure Logic App is triggered on a recurring schedule (e.g., every day)[cite: 33].
-      * [cite\_start]The Logic App first communicates with Azure Active Directory to request a secure access token, proving it has permission to call the API[cite: 34].
-      * [cite\_start]With the token in hand, the Logic App sends a GraphQL query to the live API endpoint hosted on the Azure Web App[cite: 35].
-      * The API receives the request. [cite\_start]The code in `api/auth_azure.py` validates the token against Azure AD to ensure the request is authorized[cite: 36].
-      * [cite\_start]Once authorized, the API queries the Azure Cosmos DB to fetch the requested project data[cite: 37].
-      * [cite\_start]Before returning the data, the API calls the Storage Service to save a JSON copy of the result into Azure Blob Storage[cite: 38].
-      * [cite\_start]The API sends the data back to the Logic App[cite: 39].
-      * The Logic App checks the response. If successful, it sends a success notification. [cite\_start]If it fails, it triggers a separate error-handling workflow that logs the failure and sends a detailed error alert[cite: 40, 41].
+## ⚡ Quick Start
 
-## Technologies Used
+### 1. Clone and Setup Environment
 
-This project leverages a modern stack of tools and cloud services. The following table provides a description of each component and its role:
+```bash
+git clone <repository-url>
+cd mseone-poc
 
-| Technology | Description |
-| :--- | :--- |
-| **Python** | The core programming language used to build the API. [cite\_start]Its simplicity and extensive libraries make it ideal for web development[cite: 21]. |
-| **GraphQL** | A query language for APIs. [cite\_start]Instead of having multiple fixed endpoints like in traditional REST APIs, GraphQL exposes a single endpoint where clients can request exactly the data they need, making it highly efficient[cite: 21]. |
-| **FastAPI** | A high-performance Python web framework used to build the API. [cite\_start]It's known for its speed, ease of use, and automatic interactive documentation[cite: 21]. |
-| **Strawberry** | A Python library for creating GraphQL APIs. [cite\_start]It allows us to define our GraphQL schema using modern Python syntax and data classes, integrating seamlessly with FastAPI[cite: 21]. |
-| **Docker** | A platform for containerization. [cite\_start]We use it to package our FastAPI application and its dependencies into a standardized unit (a container) for easy deployment and scaling[cite: 21]. |
-| **Microsoft Azure** | [cite\_start]The cloud platform providing all the necessary services for hosting, data storage, security, and automation[cite: 21]. |
-| **Azure Web App for Containers** | A fully managed service for hosting containerized applications. [cite\_start]It handles the underlying infrastructure, allowing us to simply run our Docker container in the cloud[cite: 21]. |
-| **Azure Cosmos DB** | A globally distributed, multi-model NoSQL database service. We use it as our primary database to store and query project metadata with high performance and availability. [cite\_start]The `ProjectRepository` class directly interacts with it[cite: 22]. |
-| **Azure Blob Storage** | A service for storing large amounts of unstructured data, like files. We use it to store the JSON results of our API queries for auditing and persistence purposes. [cite\_start]This is handled by the `StorageService` class[cite: 22]. |
-| **Azure Active Directory (AAD)** | A cloud-based identity and access management service. We use it to secure our API, authenticating clients and ensuring that only requests with a valid access token are processed. [cite\_start]The validation logic is in `api/auth_azure.py`[cite: 22]. |
-| **Azure Logic Apps** | A service for creating automated workflows that integrate apps, data, and services. [cite\_start]We use it to orchestrate calls to our API, handle errors, and send notifications, all without writing extra code[cite: 22]. |
-| **Azure Pipelines** | A continuous integration and continuous delivery (CI/CD) service. [cite\_start]The `azure-pipelines.yml` file defines a pipeline that automatically installs dependencies, runs linting checks, and executes tests on every code change[cite: 22]. |
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-## Getting Started
+# Install dependencies
+pip install -r requirements.txt
+```
 
-### Prerequisites
+### 2. Environment Variables
 
-  * Python 3.11 or later
-  * Docker
-  * Azure CLI
-  * An Azure subscription
+Create a `.env` file in the project root:
 
-### Installation
+```bash
+# Application
+APP_ENV=local
 
-1.  **Clone the repository:**
+# Cosmos DB (Required)
+COSMOS_URI=https://your-cosmos-account.documents.azure.com:443/
+COSMOS_KEY=your-cosmos-primary-key
+COSMOS_DB=projectsdb
+COSMOS_CONTAINER=projects
 
-    ```bash
-    git clone https://github.com/your-username/mseone-poc.git
-    cd mseone-poc
-    ```
+# Azure Storage (Optional - for API logging)
+STORAGE_ACCOUNT=your-storage-account
+STORAGE_KEY=your-storage-key
 
-2.  **Create and activate a virtual environment:**
+# Azure AD (Production only)
+AZURE_TENANT_ID=your-tenant-id
+AZURE_AUDIENCE=api://your-app-id
+```
 
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+### 3. Initialize Database
 
-3.  **Install the dependencies:**
+Run the setup script to create the database structure and seed sample data:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+python setup_cosmos.py
+```
 
-4.  **Set up environment variables:**
+### 4. Start the API
 
-    Create a `.env` file in the root of the project and add the following variables:
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
+```
 
-    ```
-    APP_ENV=local
-    COSMOS_URI=<your_cosmos_db_uri>
-    COSMOS_KEY=<your_cosmos_db_key>
-    STORAGE_ACCOUNT=<your_storage_account_name>
-    STORAGE_KEY=<your_storage_account_key>
-    AZURE_TENANT_ID=<your_azure_tenant_id>
-    AZURE_AUDIENCE=<your_azure_audience>
-    ```
+The API will be available at:
+- **Root**: http://localhost:8001
+- **GraphQL Playground**: http://localhost:8001/graphql
+- **Health Check**: http://localhost:8001/healthz
 
-### Running the API Locally
+## 📁 Project Structure
 
-1.  **Run the FastAPI application:**
+```
+mseone-poc/
+├── api/                          # Main API package
+│   ├── __init__.py
+│   ├── main.py                   # FastAPI application entry point
+│   ├── auth.py                   # Local development authentication
+│   ├── auth_azure.py             # Azure AD JWT authentication
+│   ├── graphql/
+│   │   └── schema.py             # GraphQL schema definitions
+│   ├── repositories/
+│   │   └── projects.py           # Cosmos DB data access layer
+│   └── services/
+│       └── storage.py            # Azure Blob Storage service
+├── tests/                        # Test suite
+│   ├── test_graphql.py           # GraphQL API tests
+│   └── test_health.py            # Health endpoint tests
+├── Dockerfile                    # Multi-stage Docker build
+├── azure-pipelines.yml           # Azure DevOps CI/CD pipeline
+├── requirements.txt              # Python dependencies
+├── setup_cosmos.py               # Database initialization script
+├── pyproject.toml               # Tool configuration
+├── pytest.ini                   # Test configuration
+└── .gitignore                   # Git ignore patterns
+```
 
-    ```bash
-    uvicorn api.main:app --reload --port 8001
-    ```
+## ⚙️ Configuration
 
-2.  **Access the API documentation:**
+### Environment Variables
 
-    Open your browser and navigate to `http://localhost:8001/docs` to see the Swagger UI documentation.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_ENV` | No | `azure` | Environment: `local` or `azure` |
+| `COSMOS_URI` | Yes | - | Cosmos DB endpoint URL |
+| `COSMOS_KEY` | Yes | - | Cosmos DB primary key |
+| `COSMOS_DB` | No | `projectsdb` | Database name |
+| `COSMOS_CONTAINER` | No | `projects` | Container name |
+| `STORAGE_ACCOUNT` | No | - | Azure Storage account name |
+| `STORAGE_KEY` | No | - | Azure Storage access key |
+| `AZURE_TENANT_ID` | No | - | Azure AD tenant ID (production) |
+| `AZURE_AUDIENCE` | No | - | Azure AD application audience (production) |
 
-### Running with Docker
+### Authentication Modes
 
-1.  **Build the Docker image:**
-    ```bash
-    docker build -t mseone-poc .
-    ```
-2.  **Run the Docker container:**
-    ```bash
-    docker run -p 8001:8001 --env-file .env mseone-poc
-    ```
+#### Local Development
+- Uses fixed bearer token: `devtoken123`
+- Set `APP_ENV=local` in environment
 
-## API Usage
+#### Production (Azure)
+- Uses Azure AD JWT token validation
+- Set `APP_ENV=azure` in environment
+- Configure `AZURE_TENANT_ID` and `AZURE_AUDIENCE`
 
-### Authentication
+## 🛠️ Development
 
-All requests to `/graphql` require a Bearer token. For local development, use: `Authorization: Bearer devtoken123`.
+### Code Quality Tools
 
-### Endpoints
+The project uses modern Python development tools:
 
-  * **Health Check**: `GET /healthz`
-  * **GraphQL**: `POST /graphql`
+```bash
+# Linting with Ruff
+ruff check .
+ruff check . --fix  # Auto-fix issues
 
-### Sample Queries
+# Formatting with Black
+black .
 
-**Get a project by ID:**
+# Type checking with mypy
+mypy api/
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=api --cov-report=html --cov-report=term
+
+# Run specific test file
+pytest tests/test_graphql.py -v
+
+# Run with live logging
+pytest -s --log-cli-level=INFO
+```
+
+### Database Management
+
+```bash
+# Initialize/reset database with sample data
+python setup_cosmos.py
+
+# The script will:
+# - Create database and container
+# - Seed sample projects
+# - Validate setup
+# - Show sample queries
+```
+
+## 🔍 GraphQL Schema
+
+### Types
 
 ```graphql
-{
-  project(id: "1") {
-    id
-    name
-    status
-  }
+type Project {
+  id: ID!
+  name: String!
+  description: String
+  status: ProjectStatusEnum!
+  ownerId: String
+  createdAt: String!
+  updatedAt: String!
+  tags: [String!]!
+  budget: Float
+  dueDate: String
+}
+
+enum ProjectStatusEnum {
+  ACTIVE
+  ARCHIVED
+  DRAFT
+  COMPLETED
+}
+
+type ProjectConnection {
+  edges: [ProjectEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 ```
 
-**Get a list of projects with filtering and pagination:**
+### Sample Queries
 
+#### Get All Projects
 ```graphql
-query($first: Int!, $name: String) {
-  projects(first: $first, nameContains: $name) {
+query {
+  projects(first: 10) {
     totalCount
     edges {
       node {
         id
         name
         status
+        budget
+        tags
       }
     }
     pageInfo {
@@ -168,31 +257,261 @@ query($first: Int!, $name: String) {
 }
 ```
 
-**Variables:**
-
-```json
-{
-  "first": 2,
-  "name": "o"
+#### Filter by Status
+```graphql
+query {
+  projects(status: ACTIVE, first: 5) {
+    totalCount
+    edges {
+      node {
+        id
+        name
+        ownerId
+        tags
+        budget
+      }
+    }
+  }
 }
 ```
 
-## Testing
-
-To run the automated tests, use the following command:
-
-```bash
-pytest
+#### Create Project
+```graphql
+mutation {
+  createProject(input: {
+    name: "New Project"
+    description: "Project description"
+    status: ACTIVE
+    tags: ["development", "api"]
+    budget: 100000
+    ownerId: "user123"
+  }) {
+    success
+    error
+    project {
+      id
+      name
+      status
+      createdAt
+    }
+  }
+}
 ```
 
-## Deployment
+#### Update Project
+```graphql
+mutation {
+  updateProject(
+    id: "proj_apollo_001"
+    input: {
+      name: "Updated Project Name"
+      status: COMPLETED
+      budget: 150000
+    }
+  ) {
+    success
+    project {
+      id
+      name
+      status
+      updatedAt
+    }
+  }
+}
+```
 
-This project includes a CI/CD pipeline defined in `azure-pipelines.yml` for automated deployment to Azure Web App for Containers. The pipeline is triggered on pushes to the `main` and `feature/*` branches.
+## 🌐 API Endpoints
 
-## Contributing
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/` | API information | No |
+| GET | `/healthz` | Health check with service status | No |
+| POST | `/graphql` | GraphQL endpoint | Yes |
 
-Contributions are welcome\! Please feel free to submit a pull request.
+### Health Check Response
+```json
+{
+  "status": "ok",
+  "environment": "local",
+  "cosmos_configured": true,
+  "storage_configured": true,
+  "cosmos_connection": "ok"
+}
+```
 
-## License
+## 🧪 Testing
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+### Test Categories
+
+1. **Health Tests** - Basic service availability
+2. **GraphQL Tests** - Full API functionality
+3. **Authentication Tests** - Security validation
+4. **CRUD Tests** - Complete lifecycle testing
+5. **Error Handling** - Edge cases and failures
+
+### Test Examples
+
+```bash
+# Health check
+curl -X GET http://localhost:8001/healthz
+
+# GraphQL query with auth
+curl -X POST http://localhost:8001/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer devtoken123" \
+  -d '{"query": "{ projects(first: 3) { totalCount edges { node { id name status } } } }"}'
+
+# Create project
+curl -X POST http://localhost:8001/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer devtoken123" \
+  -d '{"query": "mutation { createProject(input: { name: \"API Test\", status: ACTIVE }) { success project { id name } error } }"}'
+```
+
+## 🚀 Deployment
+
+### Azure DevOps Pipeline
+
+The project includes a comprehensive CI/CD pipeline (`azure-pipelines.yml`) with:
+
+1. **Build and Test Stage**
+   - Python setup and dependency installation
+   - Code linting with Ruff
+   - Unit tests with pytest
+   - Code coverage reporting
+
+2. **Build Image Stage**
+   - Docker image build and push to ACR
+   - Artifact publishing
+
+3. **Deploy Production Stage**
+   - Azure Web App deployment
+   - Health checks with retry logic
+   - GraphQL functional testing
+
+4. **Post-Deployment Stage**
+   - Deployment notifications
+   - Cleanup tasks
+
+### Required Azure DevOps Variables
+
+Create a variable group named `poc-variables` with:
+
+```
+WEBAPP_NAME=your-webapp-name
+RESOURCE_GROUP=your-resource-group
+ACR_LOGIN_SERVER=your-acr.azurecr.io
+COSMOS_URI=https://your-cosmos.documents.azure.com:443/
+COSMOS_KEY=your-cosmos-key
+COSMOS_DB=projectsdb
+COSMOS_CONTAINER=projects
+STORAGE_ACCOUNT=your-storage-account
+STORAGE_KEY=your-storage-key
+AZURE_TENANT_ID=your-tenant-id
+AZURE_AUDIENCE=api://your-app-id
+```
+
+### Service Connections
+
+Create these service connections in Azure DevOps:
+- `azure-connection` - Azure Resource Manager
+- `acr-connection` - Docker Registry (Azure Container Registry)
+
+## 🐳 Docker
+
+### Local Development
+```bash
+# Build image
+docker build -t mseone-poc .
+
+# Run container
+docker run -p 8080:8080 \
+  -e COSMOS_URI="your-uri" \
+  -e COSMOS_KEY="your-key" \
+  mseone-poc
+```
+
+### Multi-stage Build
+The Dockerfile uses multi-stage builds for optimization:
+- **Builder stage**: Installs dependencies
+- **Runtime stage**: Copies only necessary files for smaller image
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### 1. Cosmos DB Connection Issues
+```
+Error: Failed to connect to Cosmos DB
+```
+**Solution**: Verify `COSMOS_URI` and `COSMOS_KEY` are correct and the Cosmos DB account is accessible.
+
+#### 2. Authentication Failures
+```
+HTTP 401: Missing bearer token
+```
+**Solution**: 
+- **Local**: Use `Authorization: Bearer devtoken123`
+- **Production**: Ensure valid Azure AD JWT token
+
+#### 3. Container Creation Errors
+```
+Error: Container 'projects' not found
+```
+**Solution**: Run `python setup_cosmos.py` to initialize the database structure.
+
+#### 4. GraphQL Query Errors
+```
+Error: Cross-partition query requires enabling cross-partition queries
+```
+**Solution**: The application automatically enables cross-partition queries. Check Cosmos DB configuration.
+
+### Debug Mode
+
+Enable detailed logging by setting environment variables:
+```bash
+export PYTHONPATH=.
+export LOG_LEVEL=DEBUG
+uvicorn api.main:app --log-level debug
+```
+
+### Health Check Debugging
+
+The health endpoint provides detailed service status:
+```bash
+curl -s http://localhost:8001/healthz | jq .
+```
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Install dev dependencies**: `pip install -r requirements.txt`
+4. **Run tests**: `pytest`
+5. **Check code quality**: `ruff check . && black --check .`
+6. **Commit changes**: `git commit -m 'Add amazing feature'`
+7. **Push to branch**: `git push origin feature/amazing-feature`
+8. **Open a Pull Request**
+
+### Code Standards
+- Follow PEP 8 style guide
+- Add type hints for new functions
+- Include docstrings for public methods
+- Write tests for new features
+- Update documentation as needed
+
+## 📄 License
+
+This project is part of the mseONE PoC initiative.
+
+## 🆘 Support
+
+For questions and support:
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review the health check endpoint output
+3. Check Azure DevOps pipeline logs for deployment issues
+4. Review Cosmos DB metrics in Azure Portal
+
+---
+
+**Built with ❤️ using FastAPI, GraphQL, and Azure services**
