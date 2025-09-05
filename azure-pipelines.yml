@@ -152,23 +152,23 @@ stages:
         displayName: 'Build and Push to ACR'
         steps:
           # FIXED: Updated Docker task configuration to eliminate warning
-          - task: AzureCLI@2
+          - task: Bash@3
             inputs:
-              azureSubscription: 'acr-connection'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                # Login to ACR
-                az acr login --name $(echo $(ACR_LOGIN_SERVER) | cut -d'.' -f1)
+              targetType: 'inline'
+              script: |
+                # Login using Docker Registry service connection
+                echo "$(ACR_PASSWORD)" | docker login $(ACR_LOGIN_SERVER) -u $(ACR_USERNAME) --password-stdin
                 
-                # Build and push the image
+                # Build the image with both tags
                 docker build -t $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag) -t $(ACR_LOGIN_SERVER)/$(imageName):latest .
+                
+                # Push both tags
                 docker push $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)
                 docker push $(ACR_LOGIN_SERVER)/$(imageName):latest
                 
-                echo "✅ Docker image pushed successfully"
-            displayName: 'Build and push Docker image (no warnings)'
-            
+                echo "✅ Docker images pushed successfully"
+            displayName: 'Build and push Docker image'
+
           # Verify image was built
           - task: PowerShell@2
             inputs:
