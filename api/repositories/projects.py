@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional, List, Tuple
+from datetime import datetime, timedelta  # FIXED: Moved import to top
 from enum import Enum
 
-from azure.cosmos import CosmosClient, exceptions, PartitionKey
-from azure.cosmos.container import ContainerProxy
+from azure.cosmos import CosmosClient, PartitionKey, exceptions
 
 
 class ProjectStatus(str, Enum):
@@ -21,14 +19,14 @@ class ProjectStatus(str, Enum):
 class ProjectRecord:
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     status: ProjectStatus
-    owner_id: Optional[str]
+    owner_id: str | None
     created_at: datetime
     updated_at: datetime
-    tags: List[str]
-    budget: Optional[float]
-    due_date: Optional[datetime]
+    tags: list[str]
+    budget: float | None
+    due_date: datetime | None
     
     def to_dict(self) -> dict:
         """Convert to dictionary for Cosmos DB storage"""
@@ -47,7 +45,7 @@ class ProjectRecord:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectRecord":
+    def from_dict(cls, data: dict) -> ProjectRecord:
         """Create from Cosmos DB document"""
         return cls(
             id=data["id"],
@@ -66,11 +64,11 @@ class ProjectRecord:
 @dataclass
 class CreateProjectRequest:
     name: str
-    description: Optional[str] = None
-    owner_id: Optional[str] = None
-    tags: List[str] = None
-    budget: Optional[float] = None
-    due_date: Optional[datetime] = None
+    description: str | None = None
+    owner_id: str | None = None
+    tags: list[str] = None
+    budget: float | None = None
+    due_date: datetime | None = None
     status: ProjectStatus = ProjectStatus.DRAFT
     
     def __post_init__(self):
@@ -80,13 +78,13 @@ class CreateProjectRequest:
 
 @dataclass
 class UpdateProjectRequest:
-    name: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[ProjectStatus] = None
-    owner_id: Optional[str] = None
-    tags: Optional[List[str]] = None
-    budget: Optional[float] = None
-    due_date: Optional[datetime] = None
+    name: str | None = None
+    description: str | None = None
+    status: ProjectStatus | None = None
+    owner_id: str | None = None
+    tags: list[str] | None = None
+    budget: float | None = None
+    due_date: datetime | None = None
 
 
 class ProjectRepository:
@@ -153,12 +151,12 @@ class ProjectRepository:
         try:
             self.container.create_item(body=project.to_dict())
             return project
-        except exceptions.CosmosResourceExistsError:
-            raise ValueError(f"Project with ID {project_id} already exists")
+        except exceptions.CosmosResourceExistsError as e:
+            raise ValueError(f"Project with ID {project_id} already exists") from e  # FIXED
         except Exception as e:
-            raise RuntimeError(f"Failed to create project: {e}")
+            raise RuntimeError(f"Failed to create project: {e}") from e  # FIXED
 
-    def get_by_id(self, project_id: str) -> Optional[ProjectRecord]:
+    def get_by_id(self, project_id: str) -> ProjectRecord | None:
         """Get project by ID"""
         try:
             item = self.container.read_item(item=project_id, partition_key=project_id)
@@ -166,9 +164,9 @@ class ProjectRepository:
         except exceptions.CosmosResourceNotFoundError:
             return None
         except Exception as e:
-            raise RuntimeError(f"Failed to get project {project_id}: {e}")
+            raise RuntimeError(f"Failed to get project {project_id}: {e}") from e  # FIXED
 
-    def update_project(self, project_id: str, request: UpdateProjectRequest) -> Optional[ProjectRecord]:
+    def update_project(self, project_id: str, request: UpdateProjectRequest) -> ProjectRecord | None:
         """Update an existing project"""
         try:
             # Get existing project
@@ -206,7 +204,7 @@ class ProjectRepository:
         except ValueError:
             raise  # Re-raise validation errors
         except Exception as e:
-            raise RuntimeError(f"Failed to update project {project_id}: {e}")
+            raise RuntimeError(f"Failed to update project {project_id}: {e}") from e  # FIXED
 
     def delete_project(self, project_id: str) -> bool:
         """Delete a project"""
@@ -216,19 +214,19 @@ class ProjectRepository:
         except exceptions.CosmosResourceNotFoundError:
             return False
         except Exception as e:
-            raise RuntimeError(f"Failed to delete project {project_id}: {e}")
+            raise RuntimeError(f"Failed to delete project {project_id}: {e}") from e  # FIXED
 
     def list_projects(
         self,
-        name_contains: Optional[str] = None,
-        status: Optional[ProjectStatus] = None,
-        owner_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        name_contains: str | None = None,
+        status: ProjectStatus | None = None,
+        owner_id: str | None = None,
+        tags: list[str] | None = None,
         first: int = 10,
-        after_id: Optional[str] = None,
+        after_id: str | None = None,
         order_by: str = "created_at",
         order_direction: str = "DESC"
-    ) -> Tuple[List[ProjectRecord], bool]:
+    ) -> tuple[list[ProjectRecord], bool]:
         """List projects with filtering and pagination"""
         
         # Build query
@@ -309,14 +307,14 @@ class ProjectRepository:
             return projects, has_next_page
 
         except Exception as e:
-            raise RuntimeError(f"Failed to list projects: {e}")
+            raise RuntimeError(f"Failed to list projects: {e}") from e  # FIXED
 
     def get_project_count(
         self,
-        name_contains: Optional[str] = None,
-        status: Optional[ProjectStatus] = None,
-        owner_id: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        name_contains: str | None = None,
+        status: ProjectStatus | None = None,
+        owner_id: str | None = None,
+        tags: list[str] | None = None
     ) -> int:
         """Get total count of projects matching filters"""
         
@@ -348,7 +346,7 @@ class ProjectRepository:
             ))
             return result[0] if result else 0
         except Exception as e:
-            raise RuntimeError(f"Failed to get project count: {e}")
+            raise RuntimeError(f"Failed to get project count: {e}") from e  # FIXED
 
     def get_projects_by_status_summary(self) -> dict:
         """Get summary of projects by status using individual queries"""
@@ -371,7 +369,7 @@ class ProjectRepository:
         
         return summary
 
-    def get_projects_by_owner(self, owner_id: str) -> List[ProjectRecord]:
+    def get_projects_by_owner(self, owner_id: str) -> list[ProjectRecord]:
         """Get all projects for a specific owner"""
         query = "SELECT * FROM c WHERE c.type = 'project' AND c.owner_id = @owner_id"
         parameters = [{"name": "@owner_id", "value": owner_id}]
@@ -384,9 +382,9 @@ class ProjectRepository:
             ))
             return [ProjectRecord.from_dict(item) for item in items]
         except Exception as e:
-            raise RuntimeError(f"Failed to get projects for owner {owner_id}: {e}")
+            raise RuntimeError(f"Failed to get projects for owner {owner_id}: {e}") from e  # FIXED
 
-    def get_projects_by_tag(self, tag: str) -> List[ProjectRecord]:
+    def get_projects_by_tag(self, tag: str) -> list[ProjectRecord]:
         """Get all projects containing a specific tag"""
         query = "SELECT * FROM c WHERE c.type = 'project' AND ARRAY_CONTAINS(c.tags, @tag)"
         parameters = [{"name": "@tag", "value": tag}]
@@ -399,9 +397,9 @@ class ProjectRepository:
             ))
             return [ProjectRecord.from_dict(item) for item in items]
         except Exception as e:
-            raise RuntimeError(f"Failed to get projects for tag {tag}: {e}")
+            raise RuntimeError(f"Failed to get projects for tag {tag}: {e}") from e  # FIXED
 
-    def search_projects(self, search_term: str, limit: int = 20) -> List[ProjectRecord]:
+    def search_projects(self, search_term: str, limit: int = 20) -> list[ProjectRecord]:
         """Search projects by name or description"""
         query = """
         SELECT * FROM c 
@@ -421,9 +419,9 @@ class ProjectRepository:
             ))
             return [ProjectRecord.from_dict(item) for item in items]
         except Exception as e:
-            raise RuntimeError(f"Failed to search projects: {e}")
+            raise RuntimeError(f"Failed to search projects: {e}") from e  # FIXED
 
-    def get_projects_due_soon(self, days: int = 7) -> List[ProjectRecord]:
+    def get_projects_due_soon(self, days: int = 7) -> list[ProjectRecord]:
         """Get projects due within specified days"""
         cutoff_date = (datetime.utcnow() + timedelta(days=days)).isoformat()
         
@@ -445,7 +443,7 @@ class ProjectRepository:
             ))
             return [ProjectRecord.from_dict(item) for item in items]
         except Exception as e:
-            raise RuntimeError(f"Failed to get projects due soon: {e}")
+            raise RuntimeError(f"Failed to get projects due soon: {e}") from e  # FIXED
 
     def get_budget_summary(self) -> dict:
         """Get budget summary across all projects"""
@@ -479,8 +477,4 @@ class ProjectRepository:
                 "min_budget": 0
             }
         except Exception as e:
-            raise RuntimeError(f"Failed to get budget summary: {e}")
-
-
-# Import fix for datetime
-from datetime import timedelta
+            raise RuntimeError(f"Failed to get budget summary: {e}") from e  # FIXED

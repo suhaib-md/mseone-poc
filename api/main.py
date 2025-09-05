@@ -65,7 +65,6 @@ def health():
     try:
         # Test basic imports
         from api.repositories.projects import ProjectRepository
-        from api.services.storage import StorageService
         
         health_info = {
             "status": "ok",
@@ -76,7 +75,8 @@ def health():
         
         # Test Cosmos connection (lightweight check)
         try:
-            repo = ProjectRepository()
+            # FIXED: Removed unused variable 'repo'
+            ProjectRepository()
             # Just test that we can initialize the client
             health_info["cosmos_connection"] = "ok"
         except Exception as e:

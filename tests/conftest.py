@@ -1,7 +1,8 @@
 # tests/conftest.py - Updated with proper base64 key
-import os
-import pytest
 import base64
+import os
+
+import pytest
 
 # Generate a proper fake base64 key for testing
 fake_cosmos_key = base64.b64encode(b'fake_cosmos_key_for_testing_purposes_123456').decode('ascii')
@@ -46,7 +47,7 @@ def setup_test_environment():
 @pytest.fixture
 def mock_cosmos_repo():
     """Mock the ProjectRepository to avoid real Cosmos DB connections"""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
     
     with patch('api.repositories.projects.ProjectRepository') as mock_repo_class:
         mock_repo = MagicMock()
@@ -57,7 +58,7 @@ def mock_cosmos_repo():
 @pytest.fixture
 def mock_storage_service():
     """Mock the StorageService to avoid real Azure Storage connections"""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
     
     with patch('api.services.storage.StorageService') as mock_storage_class:
         mock_storage = MagicMock()

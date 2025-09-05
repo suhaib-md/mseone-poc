@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-from typing import Optional, List
 from enum import Enum
 
 import strawberry
 
 from api.repositories.projects import (
-    ProjectRecord, 
-    ProjectRepository, 
+    CreateProjectRequest,
+    ProjectRecord,
+    ProjectRepository,
     ProjectStatus,
-    CreateProjectRequest, 
-    UpdateProjectRequest
+    UpdateProjectRequest,
 )
 from api.services.storage import StorageService
 
@@ -71,14 +70,14 @@ def convert_status_from_repo_enum(status: ProjectStatus) -> ProjectStatusEnum:
 class Project:
     id: strawberry.ID
     name: str
-    description: Optional[str]
+    description: str | None
     status: ProjectStatusEnum
-    owner_id: Optional[str]
+    owner_id: str | None
     created_at: str  # ISO format
     updated_at: str  # ISO format
-    tags: List[str]
-    budget: Optional[float]
-    due_date: Optional[str]  # ISO format
+    tags: list[str]
+    budget: float | None
+    due_date: str | None  # ISO format
 
     @staticmethod
     def from_record(rec: ProjectRecord) -> Project:
@@ -108,7 +107,7 @@ class ProjectSummary:
 @strawberry.type
 class PageInfo:
     has_next_page: bool
-    end_cursor: Optional[str]
+    end_cursor: str | None
 
 
 @strawberry.type
@@ -119,7 +118,7 @@ class ProjectEdge:
 
 @strawberry.type
 class ProjectConnection:
-    edges: List[ProjectEdge]
+    edges: list[ProjectEdge]
     page_info: PageInfo
     total_count: int
 
@@ -128,52 +127,52 @@ class ProjectConnection:
 @strawberry.input
 class CreateProjectInput:
     name: str
-    description: Optional[str] = None
-    owner_id: Optional[str] = None
-    tags: Optional[List[str]] = None
-    budget: Optional[float] = None
-    due_date: Optional[str] = None  # ISO format
-    status: Optional[ProjectStatusEnum] = ProjectStatusEnum.DRAFT
+    description: str | None = None
+    owner_id: str | None = None
+    tags: list[str] | None = None
+    budget: float | None = None
+    due_date: str | None = None  # ISO format
+    status: ProjectStatusEnum | None = ProjectStatusEnum.DRAFT
 
 
 @strawberry.input
 class UpdateProjectInput:
-    name: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[ProjectStatusEnum] = None
-    owner_id: Optional[str] = None
-    tags: Optional[List[str]] = None
-    budget: Optional[float] = None
-    due_date: Optional[str] = None  # ISO format
+    name: str | None = None
+    description: str | None = None
+    status: ProjectStatusEnum | None = None
+    owner_id: str | None = None
+    tags: list[str] | None = None
+    budget: float | None = None
+    due_date: str | None = None  # ISO format
 
 
 # Response Types for Mutations
 @strawberry.type
 class CreateProjectResponse:
     success: bool
-    project: Optional[Project]
-    error: Optional[str]
+    project: Project | None
+    error: str | None
 
 
 @strawberry.type
 class UpdateProjectResponse:
     success: bool
-    project: Optional[Project]
-    error: Optional[str]
+    project: Project | None
+    error: str | None
 
 
 @strawberry.type
 class DeleteProjectResponse:
     success: bool
     project_id: str
-    error: Optional[str]
+    error: str | None
 
 
 # GraphQL Query Class
 @strawberry.type
 class Query:
     @strawberry.field
-    def project(self, id: strawberry.ID) -> Optional[Project]:
+    def project(self, id: strawberry.ID) -> Project | None:
         """Get a single project by ID"""
         repo = ProjectRepository()
         rec = repo.get_by_id(str(id))
@@ -202,11 +201,11 @@ class Query:
     def projects(
         self,
         first: int = 10,
-        after: Optional[str] = None,
-        name_contains: Optional[str] = None,
-        status: Optional[ProjectStatusEnum] = None,
-        owner_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        after: str | None = None,
+        name_contains: str | None = None,
+        status: ProjectStatusEnum | None = None,
+        owner_id: str | None = None,
+        tags: list[str] | None = None,
         order_by: OrderBy = OrderBy.CREATED_AT,
         order_direction: OrderDirection = OrderDirection.DESC,
     ) -> ProjectConnection:

@@ -1,13 +1,12 @@
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
+from unittest.mock import MagicMock, patch
+
 from fastapi.testclient import TestClient
-import pytest
-from unittest.mock import patch, MagicMock
-import os
 
 from api.auth import LOCAL_DEV_TOKEN
 from api.main import app
 from api.repositories.projects import ProjectStatus
+
 
 # Helper function to get auth headers
 def get_auth_headers():

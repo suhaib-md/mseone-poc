@@ -141,19 +141,19 @@ def validate_jwt(token: str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
-        )
+        ) from e  # FIXED: Added 'from e'
     except jwt.InvalidTokenError as e:
         print(f"JWT Invalid token error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Token validation failed: {e}",
-        )
+        ) from e  # FIXED: Added 'from e'
     except Exception as e:
         print(f"Token validation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {e}",
-        )
+        ) from e  # FIXED: Added 'from e'
 
 
 async def require_aad_bearer(authorization: str = Header(None)):

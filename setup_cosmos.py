@@ -14,7 +14,7 @@ FIXED: Cross-partition query issues with GROUP BY aggregates
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict
+
 from azure.cosmos import CosmosClient, PartitionKey
 from azure.cosmos.exceptions import CosmosResourceExistsError
 
@@ -61,7 +61,7 @@ def create_database_and_container(client: CosmosClient):
     return database, container
 
 
-def create_sample_projects() -> List[Dict]:
+def create_sample_projects() -> list[dict]:
     """Generate sample project data"""
     base_date = datetime.utcnow()
     
@@ -175,7 +175,7 @@ def create_sample_projects() -> List[Dict]:
     return projects
 
 
-def seed_projects(container, projects: List[Dict]):
+def seed_projects(container, projects: list[dict]):
     """Seed the container with sample projects"""
     print(f"Seeding {len(projects)} sample projects...")
     
@@ -200,23 +200,6 @@ def create_indexes(container):
     
     try:
         # Read current indexing policy
-        indexing_policy = container.read().get('indexingPolicy', {})
-        
-        # Add composite indexes for common query patterns
-        composite_indexes = [
-            [
-                {"path": "/status", "order": "ascending"},
-                {"path": "/created_at", "order": "descending"}
-            ],
-            [
-                {"path": "/owner_id", "order": "ascending"},
-                {"path": "/updated_at", "order": "descending"}
-            ],
-            [
-                {"path": "/status", "order": "ascending"},
-                {"path": "/due_date", "order": "ascending"}
-            ]
-        ]
         
         # Update indexing policy (this requires container recreation in practice)
         # For this demo, we'll just note that these would be beneficial
@@ -306,7 +289,7 @@ def print_connection_info():
     print(f"URI: {cosmos_uri}")
     print(f"Database: {database_name}")
     print(f"Container: {container_name}")
-    print(f"Partition Key: /id")
+    print("Partition Key: /id")
     print("="*60)
 
 
@@ -567,7 +550,7 @@ def main():
     print_sample_queries()
     print_curl_examples()
     
-    print(f"\n🎉 Setup completed successfully!")
+    print("\n🎉 Setup completed successfully!")
     print("Your API should now be able to query the seeded data.")
     print("\nNext steps:")
     print("1. Start your FastAPI server: uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload")
