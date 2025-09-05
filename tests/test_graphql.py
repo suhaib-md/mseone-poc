@@ -9,12 +9,11 @@ from api.auth import LOCAL_DEV_TOKEN
 from api.main import app
 from api.repositories.projects import ProjectStatus
 
-client = TestClient(app)
-
 # Helper function to get auth headers
 def get_auth_headers():
     return {"Authorization": f"Bearer {LOCAL_DEV_TOKEN}"}
 
+client = TestClient(app)
 
 class TestHealthEndpoint:
     def test_healthz(self):

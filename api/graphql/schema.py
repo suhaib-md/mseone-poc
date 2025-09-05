@@ -180,7 +180,7 @@ class Query:
         
         if rec:
             # Save result to Blob Storage
-            storage = StorageService(),
+            storage = StorageService()
             try:
                 storage.save_result({
                     "query": "project",

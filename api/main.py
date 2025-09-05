@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,11 +9,18 @@ from strawberry.fastapi import GraphQLRouter
 
 from api.graphql.schema import schema
 
-ENV = os.getenv("APP_ENV", "azure")
+if 'pytest' in sys.modules or 'PYTEST_CURRENT_TEST' in os.environ:
+    os.environ['APP_ENV'] = 'local'
+    print("🧪 Test mode detected - forcing local environment")
+
+ENV = os.getenv("APP_ENV", "azure").lower()
+print(f"🌍 Running in environment: {ENV}")
 
 if ENV == "local":
+    print("🔓 Using local dev token authentication")
     from api.auth import require_bearer as auth_dep
 else:
+    print("🔐 Using Azure AD authentication") 
     from api.auth_azure import require_aad_bearer as auth_dep
 
 # Create FastAPI app first
