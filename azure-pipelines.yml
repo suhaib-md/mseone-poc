@@ -673,5 +673,5 @@ stages:
                     Write-Host "Error details: $($_.ErrorDetails.Message)"
                     # Don't fail the pipeline if Logic App trigger fails
                 }
-            displayName: 'Trigger Post-Deployment Logic App with Full Details'
+            displayName: 'Trigger Post-Deployment Logic App with Full Details and values'
             condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
