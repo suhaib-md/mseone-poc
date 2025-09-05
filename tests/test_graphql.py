@@ -16,27 +16,19 @@ def get_auth_headers():
 client = TestClient(app)
 
 class TestHealthEndpoint:
-    def test_healthz(self):
+    @patch('api.repositories.projects.ProjectRepository')
+    @patch('api.services.storage.StorageService')
+    def test_healthz(self, mock_storage_class, mock_repo_class):
         """Test health endpoint"""
-        # Mock the environment variables and dependencies to avoid real connections
-        with patch.dict(os.environ, {
-            'APP_ENV': 'local',
-            'COSMOS_KEY': 'fake_key',
-            'STORAGE_KEY': 'fake_storage_key'
-        }):
-            with patch('api.repositories.projects.ProjectRepository') as mock_repo, \
-                 patch('api.services.storage.StorageService') as mock_storage:
-                
-                # Configure mocks
-                mock_repo.return_value = MagicMock()
-                mock_storage.return_value = MagicMock()
-                
-                r = client.get("/healthz")
-                assert r.status_code == 200
-                response_data = r.json()
-                assert "status" in response_data
-                # The actual response contains more fields than just {"status": "ok"}
-                assert response_data["status"] in ["ok", "degraded"]
+        # Configure mocks
+        mock_repo_class.return_value = MagicMock()
+        mock_storage_class.return_value = MagicMock()
+        
+        r = client.get("/healthz")
+        assert r.status_code == 200
+        response_data = r.json()
+        assert "status" in response_data
+        assert response_data["status"] in ["ok", "degraded"]
 
 
 class TestProjectQueries:
@@ -46,60 +38,63 @@ class TestProjectQueries:
         r = client.post("/graphql", json=q)  # no auth
         assert r.status_code == 401
 
-    @patch('api.repositories.projects.ProjectRepository')
-    def test_project_query_not_found(self, mock_repo_class):
+    @patch('api.graphql.schema.ProjectRepository')
+    @patch('api.graphql.schema.StorageService')
+    def test_project_query_not_found(self, mock_storage_class, mock_repo_class):
         """Test querying non-existent project"""
-        # Mock the repository
+        # Configure mocks
         mock_repo = MagicMock()
         mock_repo.get_by_id.return_value = None
         mock_repo_class.return_value = mock_repo
         
-        # Mock storage service to avoid real storage calls
-        with patch('api.services.storage.StorageService') as mock_storage:
-            mock_storage.return_value.save_result.return_value = "fake-blob-name"
-            
-            q = {"query": "{ project(id: \"nonexistent\") { id name status } }"}
-            r = client.post("/graphql", json=q, headers=get_auth_headers())
-            assert r.status_code == 200
-            data = r.json()
-            assert data["data"]["project"] is None
+        mock_storage = MagicMock()
+        mock_storage.save_result.return_value = "fake-blob-name"
+        mock_storage_class.return_value = mock_storage
+        
+        q = {"query": "{ project(id: \"nonexistent\") { id name status } }"}
+        r = client.post("/graphql", json=q, headers=get_auth_headers())
+        assert r.status_code == 200
+        data = r.json()
+        assert data["data"]["project"] is None
 
-    @patch('api.repositories.projects.ProjectRepository')
-    def test_projects_list_empty(self, mock_repo_class):
+    @patch('api.graphql.schema.ProjectRepository')
+    @patch('api.graphql.schema.StorageService')
+    def test_projects_list_empty(self, mock_storage_class, mock_repo_class):
         """Test listing projects when none exist or filters return empty"""
-        # Mock the repository
+        # Configure mocks
         mock_repo = MagicMock()
         mock_repo.list_projects.return_value = ([], False)  # empty list, no next page
         mock_repo.get_project_count.return_value = 0
         mock_repo_class.return_value = mock_repo
         
-        # Mock storage service
-        with patch('api.services.storage.StorageService') as mock_storage:
-            mock_storage.return_value.save_result.return_value = "fake-blob-name"
-            
-            q = {
-                "query": """
-                query($first: Int!) {
-                    projects(first: $first) {
-                        totalCount
-                        edges { cursor node { id name status } }
-                        pageInfo { hasNextPage endCursor }
-                    }
+        mock_storage = MagicMock()
+        mock_storage.save_result.return_value = "fake-blob-name"
+        mock_storage_class.return_value = mock_storage
+        
+        q = {
+            "query": """
+            query($first: Int!) {
+                projects(first: $first) {
+                    totalCount
+                    edges { cursor node { id name status } }
+                    pageInfo { hasNextPage endCursor }
                 }
-                """,
-                "variables": {"first": 10}
             }
-            r = client.post("/graphql", json=q, headers=get_auth_headers())
-            assert r.status_code == 200
-            data = r.json()["data"]["projects"]
-            assert data["totalCount"] == 0
-            assert isinstance(data["edges"], list)
-            assert "pageInfo" in data
+            """,
+            "variables": {"first": 10}
+        }
+        r = client.post("/graphql", json=q, headers=get_auth_headers())
+        assert r.status_code == 200
+        data = r.json()["data"]["projects"]
+        assert data["totalCount"] == 0
+        assert isinstance(data["edges"], list)
+        assert "pageInfo" in data
 
-    @patch('api.repositories.projects.ProjectRepository')
-    def test_project_summary(self, mock_repo_class):
+    @patch('api.graphql.schema.ProjectRepository')
+    @patch('api.graphql.schema.StorageService')
+    def test_project_summary(self, mock_storage_class, mock_repo_class):
         """Test project summary query"""
-        # Mock the repository
+        # Configure mocks
         mock_repo = MagicMock()
         mock_repo.get_projects_by_status_summary.return_value = {
             "active": 2,
@@ -109,33 +104,34 @@ class TestProjectQueries:
         }
         mock_repo_class.return_value = mock_repo
         
-        # Mock storage service
-        with patch('api.services.storage.StorageService') as mock_storage:
-            mock_storage.return_value.save_result.return_value = "fake-blob-name"
-            
-            q = {
-                "query": """
-                {
-                    projectSummary {
-                        totalProjects
-                        activeProjects
-                        archivedProjects
-                        draftProjects
-                        completedProjects
-                    }
+        mock_storage = MagicMock()
+        mock_storage.save_result.return_value = "fake-blob-name"
+        mock_storage_class.return_value = mock_storage
+        
+        q = {
+            "query": """
+            {
+                projectSummary {
+                    totalProjects
+                    activeProjects
+                    archivedProjects
+                    draftProjects
+                    completedProjects
                 }
-                """
             }
-            r = client.post("/graphql", json=q, headers=get_auth_headers())
-            assert r.status_code == 200
-            data = r.json()["data"]["projectSummary"]
-            assert "totalProjects" in data
-            assert data["totalProjects"] == 7  # sum of all statuses
+            """
+        }
+        r = client.post("/graphql", json=q, headers=get_auth_headers())
+        assert r.status_code == 200
+        data = r.json()["data"]["projectSummary"]
+        assert "totalProjects" in data
+        assert data["totalProjects"] == 7  # sum of all statuses
 
 
 class TestProjectMutations:
-    @patch('api.repositories.projects.ProjectRepository')
-    def test_create_project_minimal(self, mock_repo_class):
+    @patch('api.graphql.schema.ProjectRepository')
+    @patch('api.graphql.schema.StorageService')
+    def test_create_project_minimal(self, mock_storage_class, mock_repo_class):
         """Test creating project with minimal required fields"""
         from api.repositories.projects import ProjectRecord
         
@@ -153,93 +149,98 @@ class TestProjectMutations:
             due_date=None
         )
         
-        # Mock the repository
+        # Configure mocks
         mock_repo = MagicMock()
         mock_repo.create_project.return_value = mock_project
         mock_repo_class.return_value = mock_repo
         
-        # Mock storage service
-        with patch('api.services.storage.StorageService') as mock_storage:
-            mock_storage.return_value.save_result.return_value = "fake-blob-name"
-            
-            mutation = {
-                "query": """
-                mutation($input: CreateProjectInput!) {
-                    createProject(input: $input) {
-                        success
-                        error
-                        project {
-                            id
-                            name
-                            status
-                            description
-                            tags
-                            createdAt
-                            updatedAt
-                        }
-                    }
-                }
-                """,
-                "variables": {
-                    "input": {
-                        "name": "Test Project Minimal"
+        mock_storage = MagicMock()
+        mock_storage.save_result.return_value = "fake-blob-name"
+        mock_storage_class.return_value = mock_storage
+        
+        mutation = {
+            "query": """
+            mutation($input: CreateProjectInput!) {
+                createProject(input: $input) {
+                    success
+                    error
+                    project {
+                        id
+                        name
+                        status
+                        description
+                        tags
+                        createdAt
+                        updatedAt
                     }
                 }
             }
-            
-            r = client.post("/graphql", json=mutation, headers=get_auth_headers())
-            assert r.status_code == 200
-            
-            data = r.json()["data"]["createProject"]
-            assert data["success"] is True
-            assert data["error"] is None
-            assert data["project"] is not None
-            
-            project = data["project"]
-            assert project["name"] == "Test Project Minimal"
-            assert project["status"] == "DRAFT"  # Default status
-            assert project["description"] is None
-            assert project["tags"] == []
+            """,
+            "variables": {
+                "input": {
+                    "name": "Test Project Minimal"
+                }
+            }
+        }
+        
+        r = client.post("/graphql", json=mutation, headers=get_auth_headers())
+        assert r.status_code == 200
+        
+        response_data = r.json()
+        assert "data" in response_data
+        data = response_data["data"]["createProject"]
+        assert data["success"] is True
+        assert data["error"] is None
+        assert data["project"] is not None
+        
+        project = data["project"]
+        assert project["name"] == "Test Project Minimal"
+        assert project["status"] == "DRAFT"  # Default status
+        assert project["description"] is None
+        assert project["tags"] == []
 
-    @patch('api.repositories.projects.ProjectRepository')
-    def test_create_project_validation_error(self, mock_repo_class):
+    @patch('api.graphql.schema.ProjectRepository')
+    @patch('api.graphql.schema.StorageService')
+    def test_create_project_validation_error(self, mock_storage_class, mock_repo_class):
         """Test creating project with validation error"""
-        # Mock the repository to raise a validation error
+        # Configure mocks
         mock_repo = MagicMock()
         mock_repo.create_project.side_effect = ValueError("Project name cannot be empty")
         mock_repo_class.return_value = mock_repo
         
-        # Mock storage service
-        with patch('api.services.storage.StorageService') as mock_storage:
-            mock_storage.return_value.save_result.return_value = "fake-blob-name"
-            
-            mutation = {
-                "query": """
-                mutation($input: CreateProjectInput!) {
-                    createProject(input: $input) {
-                        success
-                        error
-                        project {
-                            id
-                            name
-                        }
-                    }
-                }
-                """,
-                "variables": {
-                    "input": {
-                        "name": ""  # Empty name should cause validation error
+        mock_storage = MagicMock()
+        mock_storage.save_result.return_value = "fake-blob-name"
+        mock_storage_class.return_value = mock_storage
+        
+        mutation = {
+            "query": """
+            mutation($input: CreateProjectInput!) {
+                createProject(input: $input) {
+                    success
+                    error
+                    project {
+                        id
+                        name
                     }
                 }
             }
-            
-            r = client.post("/graphql", json=mutation, headers=get_auth_headers())
-            assert r.status_code == 200
-            
-            data = r.json()["data"]["createProject"]
-            assert data["success"] is False
-            assert "Project name cannot be empty" in data["error"]
-            assert data["project"] is None
+            """,
+            "variables": {
+                "input": {
+                    "name": ""  # Empty name should cause validation error
+                }
+            }
+        }
+        
+        r = client.post("/graphql", json=mutation, headers=get_auth_headers())
+        assert r.status_code == 200
+        
+        response_data = r.json()
+        assert "data" in response_data
+        data = response_data["data"]["createProject"]
+        assert data["success"] is False
+        assert "Project name cannot be empty" in data["error"]
+        assert data["project"] is None
 
 
 class TestErrorHandling:
@@ -250,8 +251,11 @@ class TestErrorHandling:
         }
         
         r = client.post("/graphql", json=malformed_query, headers=get_auth_headers())
-        # Should return 400 for syntax errors
-        assert r.status_code == 400
+        # GraphQL returns errors in the response body, not status codes
+        assert r.status_code == 200
+        data = r.json()
+        assert "errors" in data
+        assert any("Syntax Error" in str(error) for error in data["errors"])
 
     def test_invalid_field_query(self):
         """Test querying for non-existent fields"""
@@ -260,8 +264,11 @@ class TestErrorHandling:
         }
         
         r = client.post("/graphql", json=invalid_query, headers=get_auth_headers())
-        # GraphQL should return 400 for invalid field queries
-        assert r.status_code == 400
+        # GraphQL returns errors in response body, not status codes
+        assert r.status_code == 200
+        data = r.json()
+        assert "errors" in data
+        assert any("Cannot query field" in str(error) for error in data["errors"])
 
 
 # Simple test for the basic health endpoint
