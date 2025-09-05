@@ -641,16 +641,28 @@ stages:
                 
                 $logicAppUrl = "https://prod-14.northcentralus.logic.azure.com:443/workflows/1ab32016b4b84baab559dc2d42bf6ea6/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=YWEwwph--xz9zrJyM81e2x2ecyRjBD6GaiRxmDbeL8Y"
                 
+                # Build comprehensive payload with all deployment details
                 $payload = @{
                     deploymentId = "$(Build.BuildNumber)"
-                    commitId = "$(Build.SourceVersion)"
+                    commitId = "$(Build.SourceVersion)".Substring(0, 8)  # First 8 characters
                     commitMessage = "$(Build.SourceVersionMessage)"
                     deployedBy = "$(Build.RequestedFor)"
                     deploymentTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
                     environment = "production"
                     imageTag = "$(imageTag)"
                     triggerSource = "AzureDevOpsPipeline"
+                    sourceBranch = "$(Build.SourceBranchName)"
+                    buildUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                    appHealthUrl = "https://$(WEBAPP_NAME).azurewebsites.net/healthz"
+                    repositoryName = "$(Build.Repository.Name)"
+                    repositoryUrl = "$(Build.Repository.Uri)"
+                    buildDefinitionName = "$(Build.DefinitionName)"
+                    agentName = "$(Agent.Name)"
+                    buildReason = "$(Build.Reason)"
                 } | ConvertTo-Json -Depth 3
+                
+                Write-Host "📦 Payload being sent:"
+                Write-Host $payload
                 
                 try {
                     $response = Invoke-RestMethod -Uri $logicAppUrl -Method POST -Body $payload -ContentType "application/json" -TimeoutSec 30
@@ -658,7 +670,8 @@ stages:
                     Write-Host "Response: $($response | ConvertTo-Json)"
                 } catch {
                     Write-Warning "⚠️ Failed to trigger Logic App: $($_.Exception.Message)"
+                    Write-Host "Error details: $($_.ErrorDetails.Message)"
                     # Don't fail the pipeline if Logic App trigger fails
                 }
-            displayName: 'Trigger Post-Deployment Logic App'
+            displayName: 'Trigger Post-Deployment Logic App with Full Details'
             condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
