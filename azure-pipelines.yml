@@ -152,21 +152,18 @@ stages:
         displayName: 'Build and Push to ACR'
         steps:
           # FIXED: Updated Docker task configuration to eliminate warning
-          - task: Bash@3
+          - task: Docker@2
             inputs:
-              targetType: 'inline'
-              script: |
-                # Login using Docker Registry service connection
-                echo "$(ACR_PASSWORD)" | docker login $(ACR_LOGIN_SERVER) -u $(ACR_USERNAME) --password-stdin
-                
-                # Build the image with both tags
-                docker build -t $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag) -t $(ACR_LOGIN_SERVER)/$(imageName):latest .
-                
-                # Push both tags
-                docker push $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)
-                docker push $(ACR_LOGIN_SERVER)/$(imageName):latest
-                
-                echo "✅ Docker images pushed successfully"
+              containerRegistry: 'acr-connection'
+              repository: '$(imageName)'
+              command: 'buildAndPush'
+              Dockerfile: 'Dockerfile'
+              tags: |
+                $(imageTag)
+                latest
+              # FIXED: Add these properties to prevent the warning
+              addPipelineData: false
+              addBaseImageData: false
             displayName: 'Build and push Docker image'
 
           # Verify image was built
