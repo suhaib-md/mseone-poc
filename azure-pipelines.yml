@@ -632,3 +632,33 @@ stages:
                 Write-Host "3. Keep last N builds or images older than X days"
             displayName: 'Cleanup Notes'
             condition: always()
+
+          - task: PowerShell@2
+            inputs:
+              targetType: 'inline'
+              script: |
+                Write-Host "🚀 Triggering post-deployment Logic App..."
+                
+                $logicAppUrl = "https://prod-14.northcentralus.logic.azure.com:443/workflows/1ab32016b4b84baab559dc2d42bf6ea6/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=YWEwwph--xz9zrJyM81e2x2ecyRjBD6GaiRxmDbeL8Y"
+                
+                $payload = @{
+                    deploymentId = "$(Build.BuildNumber)"
+                    commitId = "$(Build.SourceVersion)"
+                    commitMessage = "$(Build.SourceVersionMessage)"
+                    deployedBy = "$(Build.RequestedFor)"
+                    deploymentTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    environment = "production"
+                    imageTag = "$(imageTag)"
+                    triggerSource = "AzureDevOpsPipeline"
+                } | ConvertTo-Json -Depth 3
+                
+                try {
+                    $response = Invoke-RestMethod -Uri $logicAppUrl -Method POST -Body $payload -ContentType "application/json" -TimeoutSec 30
+                    Write-Host "✅ Logic App triggered successfully"
+                    Write-Host "Response: $($response | ConvertTo-Json)"
+                } catch {
+                    Write-Warning "⚠️ Failed to trigger Logic App: $($_.Exception.Message)"
+                    # Don't fail the pipeline if Logic App trigger fails
+                }
+            displayName: 'Trigger Post-Deployment Logic App'
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
