@@ -152,40 +152,23 @@ stages:
         displayName: 'Build and Push to ACR'
         steps:
           # FIXED: Updated Docker task configuration to eliminate warning
-          - task: Docker@2
+          - task: AzureCLI@2
             inputs:
-              containerRegistry: 'acr-connection'
-              repository: '$(imageName)'
-              command: 'buildAndPush'
-              Dockerfile: 'Dockerfile'
-              tags: |
-                $(imageTag)
-                latest
-              # FIXED: Add these properties to prevent the warning
-              addPipelineData: false
-              addBaseImageData: false
-            displayName: 'Build and push Docker image'
-
-          # ALTERNATIVE: If the above still shows warnings, use this approach instead
-          # - task: PowerShell@2
-          #   inputs:
-          #     targetType: 'inline'
-          #     script: |
-          #       Write-Host "🐳 Building Docker image..."
-          #       
-          #       # Build the image
-          #       docker build -t $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag) -t $(ACR_LOGIN_SERVER)/$(imageName):latest .
-          #       
-          #       # Login to ACR
-          #       echo "$(ACR_PASSWORD)" | docker login $(ACR_LOGIN_SERVER) -u $(ACR_USERNAME) --password-stdin
-          #       
-          #       # Push both tags
-          #       docker push $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)
-          #       docker push $(ACR_LOGIN_SERVER)/$(imageName):latest
-          #       
-          #       Write-Host "✅ Docker image pushed successfully"
-          #   displayName: 'Build and Push Docker Image (Alternative)'
-
+              azureSubscription: 'acr-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Login to ACR
+                az acr login --name $(echo $(ACR_LOGIN_SERVER) | cut -d'.' -f1)
+                
+                # Build and push the image
+                docker build -t $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag) -t $(ACR_LOGIN_SERVER)/$(imageName):latest .
+                docker push $(ACR_LOGIN_SERVER)/$(imageName):$(imageTag)
+                docker push $(ACR_LOGIN_SERVER)/$(imageName):latest
+                
+                echo "✅ Docker image pushed successfully"
+            displayName: 'Build and push Docker image (no warnings)'
+            
           # Verify image was built
           - task: PowerShell@2
             inputs:
