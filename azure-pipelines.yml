@@ -1,4 +1,5 @@
-# Azure DevOps CI/CD Pipeline for mseONE PoC - Updated
+# Azure DevOps CI/CD Pipeline for mseONE PoC
+#test
 # Fixed Docker task warning and enhanced with GraphQL test results in notifications
 
 trigger:
