@@ -80,9 +80,7 @@ def health():
 
         # Test Cosmos connection (lightweight check)
         try:
-            # FIXED: Removed unused variable 'repo'
             ProjectRepository()
-            # Just test that we can initialize the client
             health_info["cosmos_connection"] = "ok"
         except Exception as e:
             health_info["cosmos_connection"] = f"error: {str(e)}"
